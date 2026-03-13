@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState, useEffect } from "react";
 import { AnalyzeUsageButton } from "@/src/components/analyze-usage-button";
 import { AssetStarButton } from "@/src/components/asset-star-button";
 import { MediaPreview } from "@/src/components/media-preview";
+import { ReplyComposer } from "@/src/components/reply-composer";
 import { resolveMediaDisplayUrl } from "@/src/lib/media-display";
 import type { TweetUsageRecord } from "@/src/lib/types";
+import { getPreferredXStatusUrl } from "@/src/lib/x-status-url";
 
 function formatDate(value: string | null | undefined): string {
   if (!value) {
@@ -72,7 +74,9 @@ export function UsageQueue(props: {
   const [hideDuplicateAssets, setHideDuplicateAssets] = useState(props.initialHideDuplicateAssets ?? true);
   const [query, setQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"newest" | "duplicates" | "hotness">("newest");
+  const [openComposerUsageId, setOpenComposerUsageId] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
+  const openComposerRef = useRef<HTMLDivElement | null>(null);
 
   const counts = useMemo(
     () => ({
@@ -146,9 +150,13 @@ export function UsageQueue(props: {
   }
 
   function toggleExpanded(usageId: string): void {
-    setExpandedUsageIds((current) =>
-      current.includes(usageId) ? current.filter((id) => id !== usageId) : [...current, usageId]
-    );
+    if (expandedUsageIds.includes(usageId)) {
+      setExpandedUsageIds((current) => current.filter((id) => id !== usageId));
+      setOpenComposerUsageId((openId) => (openId === usageId ? null : openId));
+      return;
+    }
+
+    setExpandedUsageIds((current) => [...current, usageId]);
   }
 
   function expandAll(): void {
@@ -157,7 +165,24 @@ export function UsageQueue(props: {
 
   function collapseAll(): void {
     setExpandedUsageIds([]);
+    setOpenComposerUsageId(null);
   }
+
+  useEffect(() => {
+    if (!openComposerUsageId || !openComposerRef.current) {
+      return;
+    }
+
+    openComposerRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest"
+    });
+
+    const focusTarget = openComposerRef.current.querySelector<HTMLElement>(
+      "select, input, textarea, button, a[href]"
+    );
+    focusTarget?.focus({ preventScroll: true });
+  }, [openComposerUsageId]);
 
   return (
     <section className="relative z-10 terminal-panel">
@@ -301,6 +326,9 @@ export function UsageQueue(props: {
                 previewUrl: media.previewUrl,
                 sourceUrl: media.sourceUrl
               });
+              const tweetUrl = getPreferredXStatusUrl(tweet.tweetUrl);
+              const composerPanelId = `usage-reply-composer-${usageId}`;
+              const isComposerOpen = openComposerUsageId === usageId;
 
               return (
                 <article key={usageId} className="neon-card min-w-0 p-3 sm:p-3.5">
@@ -394,11 +422,27 @@ export function UsageQueue(props: {
                         </div>
 
                         <div className="mt-2.5">
-                          <AnalyzeUsageButton
-                            tweetId={tweet.tweetId}
-                            mediaIndex={mediaIndex}
-                            className="tt-button"
-                          />
+                          <div className="flex flex-wrap gap-2">
+                            <AnalyzeUsageButton
+                              tweetId={tweet.tweetId}
+                              mediaIndex={mediaIndex}
+                              className="tt-button"
+                            />
+                            {tweet.tweetId ? (
+                              <button
+                                type="button"
+                                className="tt-link"
+                                aria-controls={composerPanelId}
+                                aria-expanded={isComposerOpen}
+                                onClick={() => {
+                                  setExpandedUsageIds((current) => (current.includes(usageId) ? current : [...current, usageId]));
+                                  setOpenComposerUsageId((current) => (current === usageId ? null : usageId));
+                                }}
+                              >
+                                <span>{isComposerOpen ? "Hide response generator" : "Generate response"}</span>
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
 
                         {viewMode === "detail" ? (
@@ -445,6 +489,40 @@ export function UsageQueue(props: {
                             {analysis.caption_brief ?? analysis.scene_description ?? "Open detail view for full analysis and similarity match context."}
                           </div>
                         )}
+
+                        {isComposerOpen && tweet.tweetId ? (
+                          <div
+                            id={composerPanelId}
+                            ref={openComposerRef}
+                            className="mt-4 scroll-mt-24 border-t border-white/10 pt-4"
+                          >
+                            <ReplyComposer
+                              usageId={usageId}
+                              tweetId={tweet.tweetId}
+                              subject={{
+                                usageId,
+                                tweetId: tweet.tweetId,
+                                tweetUrl,
+                                authorUsername: tweet.authorUsername,
+                                createdAt: tweet.createdAt,
+                                tweetText: tweet.text,
+                                mediaKind: media.mediaKind,
+                                analysis: {
+                                  captionBrief: analysis.caption_brief,
+                                  sceneDescription: analysis.scene_description,
+                                  primaryEmotion: analysis.primary_emotion,
+                                  conveys: analysis.conveys,
+                                  userIntent: analysis.user_intent,
+                                  rhetoricalRole: analysis.rhetorical_role,
+                                  textMediaRelationship: analysis.text_media_relationship,
+                                  culturalReference: analysis.cultural_reference,
+                                  analogyTarget: analysis.analogy_target,
+                                  searchKeywords: analysis.search_keywords
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>

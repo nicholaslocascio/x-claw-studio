@@ -16,6 +16,7 @@ export const topicPostRequestSchema = z.object({
   topicId: z.string().min(1),
   goal: z.enum(TOPIC_POST_GOALS).default("insight"),
   mode: z.enum(["single", "all_goals"]).default("single"),
+  maxConcurrency: z.coerce.number().int().min(1).max(TOPIC_POST_GOALS.length).optional(),
   toneHint: z.string().trim().max(120).optional(),
   angleHint: z.string().trim().max(280).optional(),
   constraints: z.string().trim().max(280).optional()
@@ -104,4 +105,6 @@ export interface TopicPostProgressEvent {
   goal?: TopicPostGoal | null;
   completedGoals?: number;
   totalGoals?: number;
+  runningGoals?: number;
+  queuedGoals?: number;
 }

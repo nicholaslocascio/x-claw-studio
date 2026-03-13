@@ -3,6 +3,8 @@ import path from "node:path";
 import type { DesiredReplyMediaWishlistEntry } from "@/src/lib/reply-composer";
 import { buildUsageId } from "@/src/lib/usage-id";
 import type {
+  CapturedTweetFilter,
+  CapturedTweetPage,
   CapturedTweetRecord,
   CrawlManifest,
   ExtractedTweet,
@@ -37,6 +39,8 @@ const projectRoot = process.cwd();
 const HOTNESS_HALF_LIFE_HOURS = 48;
 const HOTNESS_DUPLICATE_WEIGHT = 2.5;
 const HOTNESS_LIKE_WEIGHT = 1;
+export const CAPTURED_TWEET_PAGE_SIZE = 200;
+export const MAX_CAPTURED_TWEET_PAGE_SIZE = 200;
 
 function readJsonFile<T>(filePath: string): T | null {
   if (!fs.existsSync(filePath)) {
@@ -208,6 +212,94 @@ function getUsageTimestampMs(usage: TweetUsageRecord): number {
   const timestamp = usage.tweet.createdAt ?? usage.tweet.extraction.extractedAt ?? null;
   const parsed = timestamp ? Date.parse(timestamp) : Number.NaN;
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getCapturedTweetTimestampMs(record: CapturedTweetRecord): number {
+  const timestamp = record.tweet.createdAt ?? record.tweet.extraction.extractedAt ?? null;
+  const parsed = timestamp ? Date.parse(timestamp) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeCapturedTweetFilter(value: string | null | undefined): CapturedTweetFilter {
+  switch (value) {
+    case "with_media":
+    case "without_media":
+    case "all":
+      return value;
+    default:
+      return "all";
+  }
+}
+
+function normalizeCapturedTweetQuery(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function matchesCapturedTweetQuery(entry: CapturedTweetRecord, normalizedQuery: string): boolean {
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return [
+    entry.tweet.authorUsername,
+    entry.tweet.authorDisplayName,
+    entry.tweet.text
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(normalizedQuery);
+}
+
+function matchesCapturedTweetFilter(entry: CapturedTweetRecord, tweetFilter: CapturedTweetFilter): boolean {
+  if (tweetFilter === "with_media") {
+    return entry.hasMedia;
+  }
+
+  if (tweetFilter === "without_media") {
+    return !entry.hasMedia;
+  }
+
+  return true;
+}
+
+export function getCapturedTweetPage(input: {
+  tweets: CapturedTweetRecord[];
+  page?: number;
+  pageSize?: number;
+  query?: string | null;
+  tweetFilter?: string | null;
+}): CapturedTweetPage {
+  const normalizedQuery = normalizeCapturedTweetQuery(input.query);
+  const normalizedQueryLower = normalizedQuery.toLowerCase();
+  const tweetFilter = normalizeCapturedTweetFilter(input.tweetFilter);
+  const pageSize = Math.min(MAX_CAPTURED_TWEET_PAGE_SIZE, Math.max(1, Math.floor(input.pageSize ?? CAPTURED_TWEET_PAGE_SIZE)));
+  const queryMatches = input.tweets
+    .filter((entry) => matchesCapturedTweetQuery(entry, normalizedQueryLower))
+    .sort((left, right) => getCapturedTweetTimestampMs(right) - getCapturedTweetTimestampMs(left));
+  const counts = {
+    with_media: queryMatches.filter((entry) => entry.hasMedia).length,
+    without_media: queryMatches.filter((entry) => !entry.hasMedia).length,
+    all: queryMatches.length
+  } satisfies Record<CapturedTweetFilter, number>;
+  const filteredTweets = queryMatches.filter((entry) => matchesCapturedTweetFilter(entry, tweetFilter));
+  const totalResults = filteredTweets.length;
+  const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+  const page = Math.min(Math.max(1, Math.floor(input.page ?? 1)), totalPages);
+  const startIndex = (page - 1) * pageSize;
+
+  return {
+    tweets: filteredTweets.slice(startIndex, startIndex + pageSize),
+    page,
+    pageSize,
+    totalResults,
+    totalPages,
+    hasPreviousPage: page > 1,
+    hasNextPage: page < totalPages,
+    query: normalizedQuery,
+    tweetFilter,
+    counts
+  };
 }
 
 export function computeHotnessScore(input: {

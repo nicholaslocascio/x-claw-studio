@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildReplyCompositionCleanupPrompt,
   buildReplyCompositionPlanPrompt,
   buildReplyCompositionPrompt
 } from "@/src/server/reply-composer-prompt";
-import type { ReplyCompositionPlan, ReplyCompositionRequest, ReplyComposerSubject } from "@/src/lib/reply-composer";
+import type { ReplyCompositionDraft, ReplyCompositionPlan, ReplyCompositionRequest, ReplyComposerSubject } from "@/src/lib/reply-composer";
 
 const request: ReplyCompositionRequest = {
   usageId: "usage-1",
@@ -46,6 +47,14 @@ const plan: ReplyCompositionPlan = {
   moodKeywords: ["smug", "calculated"],
   candidateSelectionCriteria: ["fits the monopoly angle", "does not overexplain"],
   avoid: ["generic startup hype"]
+};
+
+const draft: ReplyCompositionDraft = {
+  replyText: "This isn't a prediction—it’s an excuse to keep bad pricing in place.",
+  selectedCandidateId: "candidate-1",
+  mediaSelectionReason: "The image makes the timeline creep obvious.",
+  whyThisReplyWorks: "It sharpens the point without repeating the original tweet.",
+  postingNotes: null
 };
 
 describe("reply composer prompts", () => {
@@ -96,8 +105,25 @@ describe("reply composer prompts", () => {
     });
 
     expect(prompt).toContain("Treat critique as real pushback");
+    expect(prompt).toContain("Critique should usually land as disbelief, a dunk, or a blunt counter-caption");
+    expect(prompt).toContain("Bad: 'Speech is low-bandwidth for syntax.'");
     expect(prompt).toContain("Do not merely agree with the tweet in a harsher tone");
+    expect(prompt).toContain("Strong replies often hinge on one weirdly specific detail");
+    expect(prompt).toContain("Do not just continue the source tweet's wording pattern");
     expect(prompt).toContain('"stance": "agree, disagree, or mixed"');
+  });
+
+  it("teaches support planning to anchor short jokes in the reversal trigger", () => {
+    const prompt = buildReplyCompositionPlanPrompt({
+      request: {
+        usageId: "usage-1",
+        goal: "support",
+        mode: "single"
+      },
+      subject
+    });
+
+    expect(prompt).toContain("grab the moment of reversal");
   });
 
   it("passes the planned stance into final composition", () => {
@@ -113,5 +139,24 @@ describe("reply composer prompts", () => {
 
     expect(prompt).toContain("- stance: disagree");
     expect(prompt).toContain("If the goal is critique, do not return a reply that mostly agrees with the tweet.");
+    expect(prompt).toContain("Favor caption voice, disbelief, pile-on, social-truth compression, or fake dialogue");
+    expect(prompt).toContain("Prefer native post openings like when / every time / how / guy who / ok / imagine");
+    expect(prompt).toContain("If the source tweet is long, reply to one vivid detail, not the entire argument.");
+    expect(prompt).toContain("If the reply could work under dozens of unrelated tweets, it is too generic.");
+    expect(prompt).toContain("direct deposit");
+  });
+
+  it("builds a cleanup pass that keeps the selected media and bans unicode punctuation", () => {
+    const prompt = buildReplyCompositionCleanupPrompt({
+      request,
+      subject,
+      plan,
+      draft
+    });
+
+    expect(prompt).toContain("@.agents/skills/stop-slop/SKILL.md");
+    expect(prompt).toContain("Keep the same `selectedCandidateId` exactly.");
+    expect(prompt).toContain("Do not use em dashes, en dashes, curly quotes, or unicode ellipses.");
+    expect(prompt).toContain('"selectedCandidateId": "candidate-1"');
   });
 });

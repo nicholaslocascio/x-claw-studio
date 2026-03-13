@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { AssetStarButton } from "@/src/components/asset-star-button";
 import { MediaPreview } from "@/src/components/media-preview";
 import { ReplyComposer } from "@/src/components/reply-composer";
 import { resolveMediaDisplayUrl } from "@/src/lib/media-display";
-import type { CapturedTweetRecord } from "@/src/lib/types";
+import type { CapturedTweetFilter, CapturedTweetPage, CapturedTweetRecord } from "@/src/lib/types";
 import { getPreferredXStatusUrl } from "@/src/lib/x-status-url";
 
 function formatDate(value: string | null | undefined): string {
@@ -28,29 +29,86 @@ function getTweetTimestampMs(tweet: CapturedTweetRecord["tweet"]): number {
 
 export function CapturedTweetQueue(props: {
   tweets: CapturedTweetRecord[];
-  initialTweetFilter?: "with_media" | "without_media" | "all";
+  initialTweetFilter?: CapturedTweetFilter;
+  initialQuery?: string;
+  pagination?: CapturedTweetPage;
   sectionLabel?: string;
   sectionTitle?: string;
   sectionDescription?: string;
 }) {
-  const [tweetFilter, setTweetFilter] = useState<"with_media" | "without_media" | "all">(
-    props.initialTweetFilter ?? "with_media"
-  );
-  const [query, setQuery] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isRouting, startRouting] = useTransition();
+  const [tweetFilter, setTweetFilter] = useState<CapturedTweetFilter>(props.initialTweetFilter ?? "with_media");
+  const [query, setQuery] = useState(props.initialQuery ?? "");
   const [openComposerTweetKey, setOpenComposerTweetKey] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
   const openComposerRef = useRef<HTMLDivElement | null>(null);
+  const isPaginated = Boolean(props.pagination);
+
+  const buildHref = useMemo(
+    () =>
+      (nextPage: number, nextQuery: string, nextFilter: CapturedTweetFilter) => {
+        const params = new URLSearchParams(searchParams?.toString() ?? "");
+        const trimmedQuery = nextQuery.trim();
+        if (trimmedQuery) {
+          params.set("query", trimmedQuery);
+        } else {
+          params.delete("query");
+        }
+
+        if (nextFilter === "all") {
+          params.delete("filter");
+        } else {
+          params.set("filter", nextFilter);
+        }
+
+        if (nextPage <= 1) {
+          params.delete("page");
+        } else {
+          params.set("page", String(nextPage));
+        }
+
+        const queryString = params.toString();
+        return queryString ? `${pathname}?${queryString}` : pathname;
+      },
+    [pathname, searchParams]
+  );
+
+  useEffect(() => {
+    if (!isPaginated) {
+      return;
+    }
+
+    const nextQuery = deferredQuery.trim();
+    const currentQuery = props.pagination?.query ?? "";
+    const currentFilter = props.pagination?.tweetFilter ?? "all";
+
+    if (nextQuery === currentQuery && tweetFilter === currentFilter) {
+      return;
+    }
+
+    startRouting(() => {
+      router.replace(buildHref(1, nextQuery, tweetFilter), { scroll: false });
+    });
+  }, [buildHref, deferredQuery, isPaginated, props.pagination?.query, props.pagination?.tweetFilter, router, tweetFilter]);
 
   const counts = useMemo(
-    () => ({
-      with_media: props.tweets.filter((entry) => entry.hasMedia).length,
-      without_media: props.tweets.filter((entry) => !entry.hasMedia).length,
-      all: props.tweets.length
-    }),
-    [props.tweets]
+    () =>
+      props.pagination?.counts ?? {
+        with_media: props.tweets.filter((entry) => entry.hasMedia).length,
+        without_media: props.tweets.filter((entry) => !entry.hasMedia).length,
+        all: props.tweets.length
+      },
+    [props.pagination?.counts, props.tweets]
   );
 
   const visibleTweets = useMemo(() => {
+    if (isPaginated) {
+      return props.tweets;
+    }
+
     const normalizedQuery = deferredQuery.trim().toLowerCase();
 
     return [...props.tweets]
@@ -79,7 +137,11 @@ export function CapturedTweetQueue(props: {
         return haystack.includes(normalizedQuery);
       })
       .sort((left, right) => getTweetTimestampMs(right.tweet) - getTweetTimestampMs(left.tweet));
-  }, [deferredQuery, props.tweets, tweetFilter]);
+  }, [deferredQuery, isPaginated, props.tweets, tweetFilter]);
+
+  const visibleCountLabel = props.pagination
+    ? `${props.tweets.length} shown of ${props.pagination.totalResults}`
+    : `${visibleTweets.length} visible`;
 
   useEffect(() => {
     if (!openComposerTweetKey || !openComposerRef.current) {
@@ -109,7 +171,14 @@ export function CapturedTweetQueue(props: {
                 "The default view stays focused on tweets with media, but text-only posts remain visible when you need full crawl context."}
             </p>
           </div>
-          <div className="tt-chip tt-chip-accent">{visibleTweets.length} visible</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="tt-chip tt-chip-accent">{visibleCountLabel}</div>
+            {props.pagination ? (
+              <div className="tt-chip">
+                Page {props.pagination.page} of {props.pagination.totalPages}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="mb-4 flex flex-wrap gap-2">
@@ -146,6 +215,30 @@ export function CapturedTweetQueue(props: {
             placeholder="Filter by author or tweet text"
           />
         </label>
+
+        {props.pagination ? (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs uppercase tracking-[0.16em] text-slate-400">
+              {isRouting ? "Refreshing results..." : `${props.pagination.totalResults} matches across ${props.pagination.totalPages} pages`}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={buildHref(props.pagination.page - 1, props.pagination.query, props.pagination.tweetFilter)}
+                className={`tt-link ${!props.pagination.hasPreviousPage ? "pointer-events-none opacity-40" : ""}`}
+                aria-disabled={!props.pagination.hasPreviousPage}
+              >
+                <span>Previous {props.pagination.pageSize}</span>
+              </Link>
+              <Link
+                href={buildHref(props.pagination.page + 1, props.pagination.query, props.pagination.tweetFilter)}
+                className={`tt-link ${!props.pagination.hasNextPage ? "pointer-events-none opacity-40" : ""}`}
+                aria-disabled={!props.pagination.hasNextPage}
+              >
+                <span>Next {props.pagination.pageSize}</span>
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid gap-3 lg:grid-cols-2">
           {visibleTweets.map((entry) => {

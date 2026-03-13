@@ -70,6 +70,8 @@ File-backed history for generated replies and tweets.
 - request identifiers such as usage id, tweet id, topic id, or asset id
 - latest streamed progress message and detail
 - final generated outputs when the run completes
+- selected-media metadata for each saved output when the composer picked a concrete candidate, including candidate id, usage id or asset id, source tweet id or URL, and local preview paths when available
+- reply outputs can also persist alternate candidate media so `/drafts` can show the shortlist Gemini considered
 
 Written by:
 

@@ -4,6 +4,18 @@ import type { ReplyMediaCandidate } from "@/src/lib/reply-composer";
 const STOP_SLOP_SKILL_PATH = "@.agents/skills/stop-slop/SKILL.md";
 const NANO_BANANA_SKILL_NAME = "nano-banana";
 
+function buildMediaPostShapeGuidance(): string[] {
+  return [
+    "- Pick the post shape first. Useful shapes include: caption, contrast, social truth, institutional dunk, workflow truth, disbelief, status line.",
+    "- Start from what the asset shows, then decide what kind of post someone would actually make with it today.",
+    "- Keep the intelligence in the implication. Do not explain what the image already makes obvious.",
+    "- If the asset is direct proof, prefer a verdict, contrast, or status line over scene-setting.",
+    "- Prefer concrete nouns, products, brands, roles, and objects over abstract nouns like narrative, framing, discourse, infrastructure, or paradigm.",
+    "- If the draft reads like commentary on the image, rewrite it as a caption or a sharp line.",
+    "- Strong openings often start with a hard contrast, a blunt status line, when, or a quoted phrase."
+  ];
+}
+
 function formatList(values: string[]): string {
   return values.length > 0 ? values.map((value) => `- ${value}`).join("\n") : "- none";
 }
@@ -26,11 +38,20 @@ export function buildMediaPostPlanPrompt(input: {
     "",
     "Planning rules:",
     "- The tweet should feel like an original post, not a reply or dashboard note.",
+    ...buildMediaPostShapeGuidance(),
     "- Start from what the media communicates, then connect it to relevant active topics when useful.",
     "- Do not simply restate the old tweet that previously used this asset.",
     "- Prefer an angle that makes this asset newly useful now.",
     "- Plan 2 to 4 short search queries for alternate local media or imported meme templates that could beat the current asset.",
     "- Keep the final tweet plausibly postable under 280 characters.",
+    "",
+    "Bad vs good:",
+    "- Bad: 'This demonstrates the democratization of local AI.'",
+    "- Better: '100B parameters on a Mac CPU. The GPU tax is a software bug.'",
+    "- Bad: 'The asset provides evidence of efficiency gains.'",
+    "- Better: 'terminal proof that the rack was optional'",
+    "- Bad: 'People are rethinking what hardware this requires.'",
+    "- Better: 'the rack was optional'",
     "",
     `usage_id: ${subject.usageId}`,
     `asset_id: ${subject.assetId ?? "unknown"}`,
@@ -82,10 +103,10 @@ export function buildMediaPostPlanPrompt(input: {
     "",
     "Return JSON matching this shape exactly:",
     stringifyJsonShape({
-      angle: "short explanation of the best original-post angle",
-      tone: "short tone phrase",
-      postIntent: "what this tweet is trying to do",
-      targetReaction: "what readers should feel or realize",
+      angle: "posting move plus the concrete point it makes",
+      tone: "spoken register, not a marketing adjective",
+      postIntent: "what kind of post this is in the feed",
+      targetReaction: "what should click without being explained",
       searchQueries: ["query one", "query two"],
       candidateSelectionCriteria: ["criterion one", "criterion two"],
       supportingTopics: ["topic one", "topic two"],
@@ -152,6 +173,14 @@ export function buildMediaPostPrompt(input: {
     "- Use the media as the anchor. The tweet should make the chosen asset or template feel relevant now.",
     "- You may connect it to one active topic, but do not turn it into a generic headline recap.",
     "- Be specific and postable. Avoid filler, vague trend language, and obvious thesis statements.",
+    "- Favor caption voice, contrast, social-truth compression, institutional dunks, and workflow truths over analytical summary voice.",
+    "- Use concrete nouns and familiar references. If the line leans on abstract words like framing, discourse, infrastructure, narrative, paradigm, or workflow without a concrete scene, rewrite it.",
+    "- Do not explain the point after the image and first line already land it.",
+    "- One sharp sentence beats two explanatory ones.",
+    "- Prefer hard contrasts and status lines over explanatory setup when the asset already carries the proof.",
+    "- If the asset is a proof artifact like a terminal, chart, receipt, or screenshot, speak in verdicts and consequences, not scene description.",
+    "- Protect strong blunt claims. If you have a clean line that lands fast, do not soften it into commentary.",
+    "- Fragments are allowed if they sound more native than a polished sentence.",
     "- Choose `selectedCandidateId` only from the provided candidate IDs, or null if the current asset is best as-is.",
     "- Keep `mediaSelectionReason`, `whyThisTweetWorks`, and `postingNotes` concise.",
     "",
@@ -210,4 +239,52 @@ export function buildMediaPostPrompt(input: {
   );
 
   return lines.join("\n");
+}
+
+export function buildMediaPostCleanupPrompt(input: {
+  request: MediaPostRequest;
+  subject: MediaPostSubject;
+  plan: MediaPostPlan;
+  draft: MediaPostDraft;
+}): string {
+  const { request, subject, plan, draft } = input;
+
+  return [
+    `Before answering, load and follow ${STOP_SLOP_SKILL_PATH}.`,
+    "You are cleaning a generated media-led X post before it is considered done.",
+    "Rewrite only as needed to remove slop while preserving the same claim and selected media choice.",
+    "Return raw JSON only. No markdown fences.",
+    "",
+    "Cleanup rules:",
+    "- Keep the same `selectedCandidateId` exactly.",
+    "- Keep the same media-led framing and core point.",
+    "- Cut filler, generic hype, and overexplained summary language.",
+    "- Rewrite commentary voice into posting voice when needed.",
+    "- Prefer captions, contrasts, social truths, and status lines over thesis statements.",
+    "- Cut abstract nouns when the asset already gives you a concrete scene.",
+    "- End earlier. Remove any sentence that only explains the first one.",
+    "- If the line still sounds polished, roughen the register slightly. Lowercase and fragments are allowed.",
+    "- Prefer a hard contrast or blunt status line over explanatory prose.",
+    "- If the draft already has a strong blunt claim, preserve it. Do not trade sharpness for extra setup.",
+    "- Use ASCII punctuation only.",
+    "- Do not use em dashes, en dashes, curly quotes, or unicode ellipses.",
+    "- Keep `tweetText` under 280 characters.",
+    "- Keep `mediaSelectionReason`, `whyThisTweetWorks`, and `postingNotes` concise.",
+    "",
+    `Angle hint: ${request.angleHint ?? "none"}`,
+    `Asset id: ${subject.assetId ?? "unknown"}`,
+    `Planned angle: ${plan.angle}`,
+    "",
+    "Draft to clean:",
+    stringifyJsonShape(draft),
+    "",
+    "Return JSON matching this shape exactly:",
+    stringifyJsonShape({
+      tweetText: "cleaned single tweet under 280 chars",
+      selectedCandidateId: draft.selectedCandidateId,
+      mediaSelectionReason: "cleaned reason",
+      whyThisTweetWorks: "cleaned explanation",
+      postingNotes: "cleaned note or null"
+    } satisfies MediaPostDraft)
+  ].join("\n");
 }

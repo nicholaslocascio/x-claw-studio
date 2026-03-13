@@ -22,9 +22,9 @@ The current app is driven by local artifacts under `data/`, not by a live SQL da
 
 ## If You Need To Change...
 
-- Crawl behavior: start in [`src/cli/crawl-openclaw.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-openclaw.ts) or [`src/cli/crawl-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-timeline.ts)
-- OpenClaw browser interaction: start in [`src/server/openclaw-browser.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/openclaw-browser.ts)
-- Media persistence during capture: start in [`src/server/openclaw-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/openclaw-capture.ts)
+- Crawl behavior: start in [`src/cli/crawl-x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-x-api.ts), [`src/server/x-api-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts), or [`src/cli/crawl-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-timeline.ts)
+- X API client details: start in [`src/server/x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts)
+- Capture persistence during API crawls: start in [`src/server/x-api-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts)
 - Usage analysis: start in [`src/server/analysis-pipeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-pipeline.ts)
 - Saved analysis shape: start in [`src/lib/analysis-schema.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/analysis-schema.ts)
 - Asset grouping / dedupe / summaries: start in [`src/server/media-assets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-assets.ts)
@@ -42,7 +42,7 @@ flowchart TD
   B --> F["External services"]
   F --> G["Gemini"]
   F --> H["Chroma"]
-  B --> I["Local Chrome / OpenClaw / Playwright"]
+  B --> I["X API / Playwright"]
 ```
 
 ## Read Next

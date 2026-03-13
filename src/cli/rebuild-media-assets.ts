@@ -1,24 +1,27 @@
 import "@/src/lib/env";
 import { getDashboardData } from "@/src/server/data";
-import { buildMediaAssetIndex, buildMediaAssetSummaries } from "@/src/server/media-assets";
+import { syncMediaAssetIndex, syncMediaAssetSummaries } from "@/src/server/media-assets";
 
 async function main() {
   const data = getDashboardData();
-  const index = await buildMediaAssetIndex({
+  const indexSync = await syncMediaAssetIndex({
     usages: data.tweetUsages,
-    manifests: data.manifests
+    manifests: data.manifests,
+    forceFullRebuild: true
   });
-  const summaries = buildMediaAssetSummaries({
+  const summaries = syncMediaAssetSummaries({
     usages: data.tweetUsages,
-    assetIndex: index
+    assetIndex: indexSync.index,
+    forceFullRebuild: true
   });
 
   console.log(
     JSON.stringify(
       {
-        assetCount: index.assets.length,
+        assetCount: indexSync.index.assets.length,
         usageCount: data.tweetUsages.length,
-        summaryCount: summaries.summaries.length
+        summaryCount: summaries.file.summaries.length,
+        mode: indexSync.mode
       },
       null,
       2

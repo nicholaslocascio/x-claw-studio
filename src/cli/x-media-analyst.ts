@@ -63,15 +63,21 @@ Usage:
 
 Core commands:
   x-media-analyst search facets --query "<query>" [--facet <name>] [--limit <n>] [--format json|jsonl]
+  x-media-analyst search tweets [--query "<query>"] [--filter all|with_media|without_media] [--page <n>] [--limit <n>] [--format json|jsonl]
   x-media-analyst search topics --query "<query>" [--limit <n>] [--format json|jsonl]
   x-media-analyst facet list [--format json|jsonl]
+  x-media-analyst crawl x-api
   x-media-analyst crawl openclaw
   x-media-analyst crawl timeline
+  x-media-analyst capture x-api-timeline
+  x-media-analyst capture x-api-tweet
+  x-media-analyst capture x-api-tweet-and-compose-replies
   x-media-analyst capture openclaw-current
   x-media-analyst capture openclaw-current-tweet
   x-media-analyst capture openclaw-current-tweet-and-compose-replies
   x-media-analyst analyze missing
   x-media-analyst analyze tweet -- <tweetId> <mediaIndex>
+  x-media-analyst eval compose-quality [--case reply|topic|media|all]
   x-media-analyst media rebuild
   x-media-analyst media backfill-native-types
   x-media-analyst wishlist list
@@ -92,6 +98,7 @@ Utility commands:
 Examples:
   x-media-analyst facet list
   x-media-analyst search facets --query "reaction image" --format jsonl
+  x-media-analyst search tweets --filter with_media --page 2
   x-media-analyst search topics --query "OpenAI pricing backlash"
   x-media-analyst wishlist list --status pending
   x-media-analyst wishlist import --key scooby-doo-mask-reveal
@@ -115,6 +122,10 @@ const commands: Record<string, CommandNode> = {
         summary: "Search usage-analysis facets with structured output.",
         handler: (args) => runTsCli("search-facets.ts", args)
       },
+      tweets: {
+        summary: "List captured tweets with filtering and pagination.",
+        handler: (args) => runTsCli("search-tweets.ts", args)
+      },
       topics: {
         summary: "Search topic analyses with opinion and topic-level signals.",
         handler: (args) => runTsCli("search-topics.ts", args)
@@ -133,9 +144,13 @@ const commands: Record<string, CommandNode> = {
   crawl: {
     summary: "Run capture crawls against X sources.",
     children: {
+      "x-api": {
+        summary: "Run the X API home-timeline crawl.",
+        handler: (args) => runTsCli("crawl-x-api.ts", args)
+      },
       openclaw: {
-        summary: "Run the OpenClaw-backed crawl.",
-        handler: (args) => runTsCli("crawl-openclaw.ts", args)
+        summary: "Legacy alias for the X API home-timeline crawl.",
+        handler: (args) => runTsCli("crawl-x-api.ts", args)
       },
       timeline: {
         summary: "Run the Playwright timeline crawl.",
@@ -146,17 +161,29 @@ const commands: Record<string, CommandNode> = {
   capture: {
     summary: "Run one-off capture commands.",
     children: {
+      "x-api-timeline": {
+        summary: "Run a bounded X API timeline capture.",
+        handler: (args) => runTsCli("capture-x-api-timeline.ts", args)
+      },
+      "x-api-tweet": {
+        summary: "Look up one tweet by status URL and persist its assets.",
+        handler: (args) => runTsCli("capture-x-api-tweet.ts", args)
+      },
+      "x-api-tweet-and-compose-replies": {
+        summary: "Look up one tweet by status URL, then draft replies for every reply goal.",
+        handler: (args) => runTsCli("capture-x-api-tweet-and-compose-replies.ts", args)
+      },
       "openclaw-current": {
-        summary: "Capture the current attached OpenClaw tab.",
-        handler: (args) => runTsCli("capture-openclaw-current.ts", args)
+        summary: "Legacy alias for the bounded X API timeline capture.",
+        handler: (args) => runTsCli("capture-x-api-timeline.ts", args)
       },
       "openclaw-current-tweet": {
-        summary: "Capture the current tweet and the early replies without a long scroll.",
-        handler: (args) => runTsCli("capture-openclaw-current-tweet.ts", args)
+        summary: "Legacy alias for the focused X API tweet lookup.",
+        handler: (args) => runTsCli("capture-x-api-tweet.ts", args)
       },
       "openclaw-current-tweet-and-compose-replies": {
-        summary: "Capture the current tweet thread, then draft replies for every reply goal.",
-        handler: (args) => runTsCli("capture-openclaw-current-tweet-and-compose-replies.ts", args)
+        summary: "Legacy alias for the focused X API tweet lookup plus reply drafting.",
+        handler: (args) => runTsCli("capture-x-api-tweet-and-compose-replies.ts", args)
       }
     }
   },
@@ -174,6 +201,15 @@ const commands: Record<string, CommandNode> = {
       "image-prompt": {
         summary: "Render or inspect the Gemini image prompt for a usage.",
         handler: (args) => runTsCli("analyze-image-prompt.ts", args)
+      }
+    }
+  },
+  eval: {
+    summary: "Run local quality evals and other prompt checks.",
+    children: {
+      "compose-quality": {
+        summary: "Run fixed compose-quality fixtures through Gemini CLI and score the output style.",
+        handler: (args) => runTsCli("eval-compose-quality.ts", args)
       }
     }
   },

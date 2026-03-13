@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildCapturedTweetRecords } from "@/src/server/data";
-import type { ExtractedTweet, UsageAnalysis } from "@/src/lib/types";
+import { buildCapturedTweetRecords, getCapturedTweetPage } from "@/src/server/data";
+import type { CapturedTweetRecord, ExtractedTweet, UsageAnalysis } from "@/src/lib/types";
 import { buildUsageId } from "@/src/lib/usage-id";
 
 function createTweet(overrides: Partial<ExtractedTweet>): ExtractedTweet {
@@ -140,5 +140,156 @@ describe("buildCapturedTweetRecords", () => {
       mediaCount: 2,
       analyzedMediaCount: 1
     });
+  });
+});
+
+function createCapturedTweetRecord(overrides: Partial<CapturedTweetRecord>): CapturedTweetRecord {
+  const { tweet: overrideTweet, ...recordOverrides } = overrides;
+  const baseTweet = createTweet({
+    tweetId: "tweet-record",
+    text: "example tweet",
+    ...overrideTweet
+  });
+  const tweet = overrideTweet ? { ...baseTweet, ...overrideTweet } : baseTweet;
+
+  return Object.assign({
+    tweetKey: tweet.tweetId ?? "tweet-record",
+    tweet,
+    hasMedia: tweet.media.length > 0,
+    mediaCount: tweet.media.length,
+    analyzedMediaCount: 0,
+    firstMediaAssetId: null,
+    firstMediaAssetStarred: false,
+    topicLabels: [],
+    topTopicLabel: null,
+    topTopicHotnessScore: 0
+  }, recordOverrides, { tweet });
+}
+
+describe("getCapturedTweetPage", () => {
+  it("applies query and filter before paginating", () => {
+    const tweets = [
+      createCapturedTweetRecord({
+        tweet: createTweet({
+          tweetId: "3",
+          createdAt: "2026-03-10T12:00:00.000Z",
+          text: "banana update",
+          media: [
+            {
+              mediaKind: "image",
+              sourceUrl: "https://example.com/3.jpg",
+              previewUrl: "https://example.com/3.jpg",
+              posterUrl: "https://example.com/3.jpg"
+            }
+          ]
+        }),
+        hasMedia: true,
+        mediaCount: 1
+      }),
+      createCapturedTweetRecord({
+        tweet: createTweet({
+          tweetId: "2",
+          createdAt: "2026-03-09T12:00:00.000Z",
+          text: "banana without media"
+        }),
+        hasMedia: false,
+        mediaCount: 0
+      }),
+      createCapturedTweetRecord({
+        tweet: createTweet({
+          tweetId: "1",
+          createdAt: "2026-03-08T12:00:00.000Z",
+          text: "banana again",
+          media: [
+            {
+              mediaKind: "image",
+              sourceUrl: "https://example.com/1.jpg",
+              previewUrl: "https://example.com/1.jpg",
+              posterUrl: "https://example.com/1.jpg"
+            }
+          ]
+        }),
+        hasMedia: true,
+        mediaCount: 1
+      })
+    ];
+
+    const page = getCapturedTweetPage({
+      tweets,
+      query: "banana",
+      tweetFilter: "with_media",
+      page: 1,
+      pageSize: 1
+    });
+
+    expect(page.counts).toEqual({
+      with_media: 2,
+      without_media: 1,
+      all: 3
+    });
+    expect(page.totalResults).toBe(2);
+    expect(page.totalPages).toBe(2);
+    expect(page.tweets.map((entry) => entry.tweet.tweetId)).toEqual(["3"]);
+    expect(page.hasNextPage).toBe(true);
+  });
+
+  it("clamps out-of-range pages to the last available page", () => {
+    const tweets = [
+      createCapturedTweetRecord({
+        tweet: createTweet({
+          tweetId: "1",
+          createdAt: "2026-03-08T12:00:00.000Z",
+          text: "first"
+        })
+      }),
+      createCapturedTweetRecord({
+        tweet: createTweet({
+          tweetId: "2",
+          createdAt: "2026-03-09T12:00:00.000Z",
+          text: "second"
+        })
+      }),
+      createCapturedTweetRecord({
+        tweet: createTweet({
+          tweetId: "3",
+          createdAt: "2026-03-10T12:00:00.000Z",
+          text: "third"
+        })
+      })
+    ];
+
+    const page = getCapturedTweetPage({
+      tweets,
+      page: 99,
+      pageSize: 2
+    });
+
+    expect(page.page).toBe(2);
+    expect(page.totalPages).toBe(2);
+    expect(page.tweets.map((entry) => entry.tweet.tweetId)).toEqual(["1"]);
+    expect(page.hasPreviousPage).toBe(true);
+    expect(page.hasNextPage).toBe(false);
+  });
+
+  it("caps page size at 200 even when a larger limit is requested", () => {
+    const tweets = Array.from({ length: 250 }, (_, index) =>
+      createCapturedTweetRecord({
+        tweet: createTweet({
+          tweetId: `tweet-${index}`,
+          createdAt: `2026-03-${String((index % 28) + 1).padStart(2, "0")}T12:00:00.000Z`,
+          text: `tweet ${index}`
+        })
+      })
+    );
+
+    const page = getCapturedTweetPage({
+      tweets,
+      page: 1,
+      pageSize: 500
+    });
+
+    expect(page.pageSize).toBe(200);
+    expect(page.tweets).toHaveLength(200);
+    expect(page.totalPages).toBe(2);
   });
 });

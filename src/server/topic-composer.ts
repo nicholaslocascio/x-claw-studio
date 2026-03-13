@@ -36,19 +36,13 @@ async function buildTopicSubject(topicId: string): Promise<TopicPostSubject> {
   };
 }
 
-export async function composeTweetFromTopic(
+async function composeTweetForPreparedSubject(
   request: TopicPostRequest,
+  subject: TopicPostSubject,
   options?: {
     onProgress?: (event: TopicPostProgressEvent) => void;
   }
 ): Promise<TopicPostResult> {
-  options?.onProgress?.({
-    stage: "starting",
-    message: "Loading topic context",
-    detail: request.topicId
-  });
-
-  const subject = await buildTopicSubject(request.topicId);
   const model = createTopicComposerModel();
   const search = new CliFacetReplyMediaSearchProvider();
 
@@ -131,17 +125,45 @@ export async function composeTweetFromTopic(
   };
 }
 
+export async function composeTweetFromTopic(
+  request: TopicPostRequest,
+  options?: {
+    onProgress?: (event: TopicPostProgressEvent) => void;
+  }
+): Promise<TopicPostResult> {
+  options?.onProgress?.({
+    stage: "starting",
+    message: "Loading topic context",
+    detail: request.topicId
+  });
+
+  const subject = await buildTopicSubject(request.topicId);
+  return composeTweetForPreparedSubject(request, subject, options);
+}
+
 export async function composeTweetsFromTopicForAllGoals(
   request: TopicPostRequest,
   options?: {
     onProgress?: (event: TopicPostProgressEvent) => void;
   }
 ): Promise<TopicPostBatchResult> {
+  options?.onProgress?.({
+    stage: "starting",
+    message: "Loading topic context once for all goals",
+    detail: request.topicId,
+    goal: null,
+    completedGoals: 0,
+    totalGoals: TOPIC_POST_GOALS.length,
+    runningGoals: 0,
+    queuedGoals: TOPIC_POST_GOALS.length
+  });
+  const subject = await buildTopicSubject(request.topicId);
   const results = await composeAllGoals({
     goals: TOPIC_POST_GOALS,
     request,
-    runSingle: composeTweetFromTopic,
-    onProgress: options?.onProgress
+    runSingle: (goalRequest, goalOptions) => composeTweetForPreparedSubject(goalRequest, subject, goalOptions),
+    onProgress: options?.onProgress,
+    maxConcurrency: request.maxConcurrency
   });
 
   return {

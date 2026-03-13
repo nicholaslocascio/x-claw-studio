@@ -22,6 +22,38 @@ Only log things that future contributors are likely to need.
 
 ## Current Entries
 
+## 2026-03-12: Move primary capture off OpenClaw and onto the X API
+
+- Context: OpenClaw-driven scraping put the main capture path at odds with X's platform rules and forced the crawl to depend on a live browser attachment.
+- Decision: Repoint the main crawl command to the official X API under `crawl:x-api` and keep `crawl:openclaw` as a compatibility alias, using the authenticated home timeline endpoint for corpus pulls and post lookup for direct status-url capture.
+- Why: this keeps the file-backed pipeline intact while removing the browser-scrape dependency from the primary capture path.
+- Impact: operators now need `X_BEARER_TOKEN` user-context access for home timeline capture, while downstream manifests, media sync, and analysis jobs keep the same contracts.
+- Follow-up: if we need reply-thread capture through the API later, add a dedicated reply-conversation endpoint instead of bringing browser scraping back into the main flow.
+
+## 2026-03-13: Remove legacy OpenClaw browser-control surfaces from the app
+
+- Context: the app had already moved capture and draft-saving onto the X API and Typefully, but the dashboard still showed OpenClaw tab health and the repo still carried unused browser-extension routes and helpers.
+- Decision: delete the OpenClaw tab health APIs, remove the legacy control-panel widgets, and retire the unreferenced browser-control modules and tests.
+- Why: keeping a broken browser-attachment path in the UI made the product look unhealthy and sent contributors toward dead code instead of the current API-backed flow.
+- Impact: the app no longer depends on the OpenClaw browser extension anywhere in its active UI or server routes. Remaining `openclaw` task names are compatibility labels for the newer API-backed commands.
+- Follow-up: if the legacy command names become more confusing than helpful, rename the tasks and CLI scripts in a separate compatibility pass.
+
+## 2026-03-13: `all_goals` batches run in parallel with an explicit concurrency cap
+
+- Context: sequential reply/topic all-goals drafting made compare mode drag, but unconstrained fan-out would duplicate subject loading and could stampede local Gemini CLI runs.
+- Decision: move `all_goals` orchestration to a shared parallel batch runner with a per-request `maxConcurrency` cap, and preload the shared subject once before goal fan-out.
+- Why: this cuts batch wall-clock time without re-analyzing the same tweet/topic for every goal and gives operators a simple control when the local machine or Gemini CLI starts thrashing.
+- Impact: reply and topic compose progress now report running, queued, and completed counters; UI clients can tune concurrency per run instead of accepting a fixed sequential loop.
+- Follow-up: if operators settle on a stable sweet spot, consider adding a persisted default instead of starting each session at the conservative cap.
+
+## 2026-03-13: Gemini composition latency is dominated by call count first, prompt size second
+
+- Context: prompt work on the reply, topic, and media composers exposed slower-than-expected iteration times during draft generation and validation.
+- Decision: treat compose latency as an orchestration problem before treating it as a model problem, and document the fast path separately from quality tuning.
+- Why: the current compose path usually makes three Gemini CLI calls per draft (`plan -> compose -> cleanup`), and `all_goals` multiplies that cost quickly. Prompt size matters, but call count is the first lever.
+- Impact: future speed work should start in the composer model adapters and prompt builders, measure how many Gemini invocations a workflow makes, and avoid blaming Gemini itself before checking local search or Chroma startup overhead.
+- Follow-up: add a dedicated fast validation harness for one-shot prompt iteration, then decide whether cleanup should become conditional instead of always-on.
+
 ## 2026-03-11: Keep topic discovery deterministic and file-backed
 
 - Context: the dashboard needed topic ideas per tweet, aggregate topic clustering, and freshness scoring without adding another service dependency.

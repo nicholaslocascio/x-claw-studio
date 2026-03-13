@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { MediaPreview } from "@/src/components/media-preview";
+import { PostToXButton } from "@/src/components/post-to-x-button";
 import { ReplyComposer } from "@/src/components/reply-composer";
 import type { GeneratedDraftRecord } from "@/src/lib/generated-drafts";
 import { readNdjsonStream } from "@/src/lib/ndjson-stream";
@@ -46,12 +47,14 @@ export function TopicTweetComposer(props: {
   initialReplyTweetId?: string;
   autoComposeOnMount?: boolean;
 }) {
+  const maxGoalConcurrency = GOAL_OPTIONS.length;
   const initialTopicId = props.topics.some((topic) => topic.topicId === props.initialTopicId)
     ? props.initialTopicId
     : props.topics[0]?.topicId ?? "";
   const [topicId, setTopicId] = useState(initialTopicId);
   const [composeMode, setComposeMode] = useState<TopicComposeMode>(props.initialComposeMode ?? "new_post");
   const [goal, setGoal] = useState<TopicPostGoal>("insight");
+  const [maxConcurrency, setMaxConcurrency] = useState(Math.min(2, maxGoalConcurrency));
   const [toneHint, setToneHint] = useState("sharp and specific");
   const [angleHint, setAngleHint] = useState("");
   const [constraints, setConstraints] = useState("keep it punchy and postable");
@@ -69,18 +72,28 @@ export function TopicTweetComposer(props: {
     [selectedTopic]
   );
   const [selectedReplyTweetId, setSelectedReplyTweetId] = useState<string>(props.initialReplyTweetId ?? "");
-  const selectedReplyTweet = replyCandidates.find((tweet) => tweet.tweetId === selectedReplyTweetId) ?? replyCandidates[0] ?? null;
+  const effectiveReplyTweetId = useMemo(() => {
+    if (replyCandidates.some((tweet) => tweet.tweetId === selectedReplyTweetId)) {
+      return selectedReplyTweetId;
+    }
+
+    if (props.initialReplyTweetId && replyCandidates.some((tweet) => tweet.tweetId === props.initialReplyTweetId)) {
+      return props.initialReplyTweetId;
+    }
+
+    return replyCandidates[0]?.tweetId ?? "";
+  }, [props.initialReplyTweetId, replyCandidates, selectedReplyTweetId]);
+  const selectedReplyTweet = replyCandidates.find((tweet) => tweet.tweetId === effectiveReplyTweetId) ?? replyCandidates[0] ?? null;
   const latestProgress = progressEvents.at(-1) ?? null;
   const completedGoals = latestProgress?.completedGoals ?? 0;
   const totalGoals = latestProgress?.totalGoals ?? (runMode === "all_goals" ? GOAL_OPTIONS.length : 1);
-  const runAutoCompose = useEffectEvent(async () => {
-    await compose("single");
-  });
+  const runningGoals = latestProgress?.runningGoals ?? (runMode === "all_goals" && isRunning ? 1 : 0);
+  const queuedGoals = latestProgress?.queuedGoals ?? Math.max(0, totalGoals - completedGoals - runningGoals);
 
   async function loadDraftHistory(): Promise<void> {
     const params = new URLSearchParams({
       kind: "topic_post",
-      topicId,
+      topicId: topicId ?? "",
       limit: "12"
     });
     const response = await fetch(`/api/generated-drafts?${params.toString()}`);
@@ -91,59 +104,6 @@ export function TopicTweetComposer(props: {
     const body = await response.json();
     setDraftHistory(body.drafts ?? []);
   }
-
-  useEffect(() => {
-    if (!initialTopicId || initialTopicId === topicId) {
-      return;
-    }
-
-    setTopicId(initialTopicId);
-  }, [initialTopicId, topicId]);
-
-  useEffect(() => {
-    if (!selectedTopic) {
-      return;
-    }
-
-    const initialReplyTweetId = props.initialReplyTweetId;
-    const matchingInitialTweet = initialReplyTweetId
-      ? selectedTopic.representativeTweets.find((tweet) => tweet.tweetId === initialReplyTweetId)
-      : null;
-
-    if (matchingInitialTweet?.tweetId) {
-      setSelectedReplyTweetId(matchingInitialTweet.tweetId);
-      return;
-    }
-
-    if (replyCandidates[0]?.tweetId) {
-      setSelectedReplyTweetId(replyCandidates[0].tweetId);
-      return;
-    }
-
-    setSelectedReplyTweetId("");
-  }, [props.initialReplyTweetId, replyCandidates, selectedTopic]);
-
-  useEffect(() => {
-    if (!props.autoComposeOnMount || !initialTopicId || composeMode !== "new_post") {
-      return;
-    }
-
-    const key = `${initialTopicId}:single`;
-    if (autoComposeKeyRef.current === key) {
-      return;
-    }
-
-    autoComposeKeyRef.current = key;
-    void runAutoCompose();
-  }, [composeMode, initialTopicId, props.autoComposeOnMount, runAutoCompose]);
-
-  useEffect(() => {
-    if (composeMode !== "new_post" || !topicId) {
-      return;
-    }
-
-    void loadDraftHistory();
-  }, [composeMode, topicId]);
 
   async function compose(mode: TopicPostMode): Promise<void> {
     setIsRunning(true);
@@ -160,7 +120,7 @@ export function TopicTweetComposer(props: {
         updatedAt: new Date().toISOString(),
         usageId: null,
         tweetId: null,
-        topicId,
+        topicId: topicId ?? null,
         assetId: null,
         requestGoal: goal,
         requestMode: mode,
@@ -182,7 +142,8 @@ export function TopicTweetComposer(props: {
         mode,
         toneHint,
         angleHint,
-        constraints
+        constraints,
+        maxConcurrency: mode === "all_goals" ? maxConcurrency : undefined
       })
     });
 
@@ -277,6 +238,67 @@ export function TopicTweetComposer(props: {
     await loadDraftHistory();
     setIsRunning(false);
   }
+
+  const syncInitialTopicId = useEffectEvent(() => {
+    if (!initialTopicId || initialTopicId === topicId) {
+      return;
+    }
+
+    setTopicId(initialTopicId);
+  });
+
+  const runAutoCompose = useEffectEvent(() => {
+    const key = `${initialTopicId}:single`;
+    if (autoComposeKeyRef.current === key) {
+      return;
+    }
+
+    autoComposeKeyRef.current = key;
+    void compose("single");
+  });
+
+  useEffect(() => {
+    syncInitialTopicId();
+  }, [initialTopicId, topicId]);
+
+  useEffect(() => {
+    if (!props.autoComposeOnMount || !initialTopicId || composeMode !== "new_post") {
+      return;
+    }
+
+    runAutoCompose();
+  }, [composeMode, initialTopicId, props.autoComposeOnMount]);
+
+  useEffect(() => {
+    if (composeMode !== "new_post" || !topicId) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function run(): Promise<void> {
+      const params = new URLSearchParams({
+        kind: "topic_post",
+        topicId: topicId ?? "",
+        limit: "12"
+      });
+      const response = await fetch(`/api/generated-drafts?${params.toString()}`);
+      if (!response.ok || isCancelled) {
+        return;
+      }
+
+      const body = await response.json();
+      if (!isCancelled) {
+        setDraftHistory(body.drafts ?? []);
+      }
+    }
+
+    void run();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [composeMode, topicId]);
 
   return (
     <section id="topic-composer" className="relative z-10 mb-8 terminal-panel">
@@ -378,13 +400,33 @@ export function TopicTweetComposer(props: {
                 <span className="tt-field-label">Constraints</span>
                 <input value={constraints} onChange={(event) => setConstraints(event.target.value)} className="tt-input" />
               </label>
+
+              <label className="tt-field">
+                <span className="tt-field-label">All-Types Concurrency</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={maxGoalConcurrency}
+                  value={maxConcurrency}
+                  onChange={(event) => {
+                    const nextValue = Number.parseInt(event.target.value, 10);
+                    if (Number.isNaN(nextValue)) {
+                      setMaxConcurrency(1);
+                      return;
+                    }
+
+                    setMaxConcurrency(Math.max(1, Math.min(maxGoalConcurrency, nextValue)));
+                  }}
+                  className="tt-input"
+                />
+              </label>
                 </>
               ) : null}
 
               <div className="tt-subpanel-soft">
                 <p className="tt-copy">
                   {composeMode === "new_post"
-                    ? "The server plans a topic angle, searches the local media corpus, then drafts one or several tweet and media pairings so you can compare directions."
+                    ? "The server plans a topic angle, searches the local media corpus, then drafts one or several tweet and media pairings so you can compare directions. `Draft all types` loads the topic once, then fans out across goals up to this concurrency cap."
                     : "Pick one of the topic's representative tweets and reuse the existing reply composer directly from this view."}
                 </p>
               </div>
@@ -471,7 +513,9 @@ export function TopicTweetComposer(props: {
                 <div className="tt-data-label">Current Step</div>
                 <p className="mt-2 text-sm leading-6 text-slate-200">{latestProgress?.message ?? "Starting topic compose pipeline"}</p>
                 <p className="mt-3 text-sm leading-6 text-slate-200">
-                  {runMode === "all_goals" ? `Completed ${completedGoals} of ${totalGoals} types` : "Running selected type"}
+                  {runMode === "all_goals"
+                    ? `${runningGoals} running, ${queuedGoals} queued, ${completedGoals} of ${totalGoals} completed`
+                    : "Running selected type"}
                 </p>
                 {latestProgress?.detail ? (
                   <p className="mt-3 break-words font-[family:var(--font-mono)] text-xs uppercase tracking-[0.12em] text-cyan">
@@ -492,7 +536,11 @@ export function TopicTweetComposer(props: {
                   <div key={`${event.goal ?? "topic"}-${event.stage}-${index}`} className="tt-subpanel-soft">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="tt-data-label">{event.goal ? `${event.goal} • ${event.stage}` : event.stage}</div>
-                      <div className="tt-chip tt-chip-accent">step {index + 1}</div>
+                      <div className="tt-chip tt-chip-accent">
+                        {typeof event.runningGoals === "number" && typeof event.queuedGoals === "number"
+                          ? `${event.runningGoals} run / ${event.queuedGoals} queue`
+                          : `step ${index + 1}`}
+                      </div>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-200">{event.message}</p>
                     {event.detail ? (
@@ -568,6 +616,14 @@ export function TopicTweetComposer(props: {
                     <div className="tt-subpanel">
                       <p className="text-base leading-8 text-slate-100">{item.tweet.text}</p>
                     </div>
+
+                    <PostToXButton
+                      mode="new_post"
+                      text={item.tweet.text}
+                      mediaFilePath={item.selectedMedia?.videoFilePath ?? item.selectedMedia?.localFilePath ?? null}
+                      draftTitle={selectedTopic ? `${selectedTopic.label} draft` : "topic draft"}
+                      scratchpadText={item.tweet.postingNotes ?? item.tweet.whyThisTweetWorks}
+                    />
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="tt-subpanel-soft">
@@ -691,6 +747,23 @@ export function TopicTweetComposer(props: {
                         <div key={`${draft.draftId}-${index}`} className="mt-3 border border-white/10 bg-black/10 p-3">
                           <p className="text-sm leading-7 text-slate-100">{output.text}</p>
                           <p className="mt-2 text-sm leading-6 text-slate-300">{output.whyThisWorks}</p>
+                          <div className="mt-3">
+                            <PostToXButton
+                              mode="new_post"
+                              text={output.text}
+                              mediaFilePath={output.selectedMediaVideoFilePath ?? output.selectedMediaLocalFilePath ?? null}
+                              draftTitle={selectedTopic ? `${selectedTopic.label} draft` : "topic draft"}
+                              scratchpadText={output.postingNotes ?? output.whyThisWorks}
+                              draftId={draft.draftId}
+                              outputIndex={index}
+                              initialSavedAt={output.typefullySavedAt}
+                              initialPrivateUrl={output.typefullyPrivateUrl}
+                              initialShareUrl={output.typefullyShareUrl}
+                              initialDraftStatus={output.typefullyStatus}
+                              initialDraftId={output.typefullyDraftId}
+                              initialError={output.typefullyError}
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>

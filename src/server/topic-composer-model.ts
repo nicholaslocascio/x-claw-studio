@@ -8,7 +8,12 @@ import {
   type TopicPostSubject
 } from "@/src/lib/topic-composer";
 import { parseGeminiJsonResponse, runGeminiPrompt } from "@/src/server/gemini-cli-json";
-import { buildTopicPostPlanPrompt, buildTopicPostPrompt } from "@/src/server/topic-composer-prompt";
+import {
+  buildTopicPostCleanupPrompt,
+  buildTopicPostPlanPrompt,
+  buildTopicPostPrompt
+} from "@/src/server/topic-composer-prompt";
+import { looksTooAnalyticalForPost, normalizeDraftStrings } from "@/src/server/prose-cleaner";
 
 export interface TopicComposerModel {
   providerId: string;
@@ -70,7 +75,39 @@ export class GeminiCliTopicComposerModel implements TopicComposerModel {
     candidates: ReplyMediaCandidate[];
   }): Promise<TopicPostDraft> {
     const stdout = await runGeminiPrompt(buildTopicPostPrompt(input));
-    return parseGeminiJsonResponse(stdout, (value) => topicPostDraftSchema.parse(value));
+    const draft = parseGeminiJsonResponse(stdout, (value) => topicPostDraftSchema.parse(value));
+    const cleanupStdout = await runGeminiPrompt(
+      buildTopicPostCleanupPrompt({
+        request: input.request,
+        subject: input.subject,
+        plan: input.plan,
+        draft
+      })
+    );
+    const cleanedDraft = parseGeminiJsonResponse(cleanupStdout, (value) => topicPostDraftSchema.parse(value));
+    const maybeNormalized = normalizeDraftStrings({
+      ...cleanedDraft,
+      selectedCandidateId: draft.selectedCandidateId
+    });
+
+    if (!looksTooAnalyticalForPost(maybeNormalized.tweetText)) {
+      return maybeNormalized;
+    }
+
+    const finalCleanupStdout = await runGeminiPrompt(
+      buildTopicPostCleanupPrompt({
+        request: input.request,
+        subject: input.subject,
+        plan: input.plan,
+        draft: maybeNormalized
+      })
+    );
+    const finalDraft = parseGeminiJsonResponse(finalCleanupStdout, (value) => topicPostDraftSchema.parse(value));
+
+    return normalizeDraftStrings({
+      ...finalDraft,
+      selectedCandidateId: draft.selectedCandidateId
+    });
   }
 }
 

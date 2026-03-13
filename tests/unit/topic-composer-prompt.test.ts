@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildTopicPostPlanPrompt, buildTopicPostPrompt } from "@/src/server/topic-composer-prompt";
-import type { TopicPostPlan, TopicPostRequest, TopicPostSubject } from "@/src/lib/topic-composer";
+import { buildTopicPostCleanupPrompt, buildTopicPostPlanPrompt, buildTopicPostPrompt } from "@/src/server/topic-composer-prompt";
+import type { TopicPostDraft, TopicPostPlan, TopicPostRequest, TopicPostSubject } from "@/src/lib/topic-composer";
 
 const request: TopicPostRequest = {
   topicId: "topic-1",
@@ -45,6 +45,14 @@ const plan: TopicPostPlan = {
   avoid: ["celebrity recap"]
 };
 
+const draft: TopicPostDraft = {
+  tweetText: "The real film-AI shift isn’t the celeb deal—it’s which production defaults get baked into the toolchain.",
+  selectedCandidateId: "candidate-2",
+  mediaSelectionReason: "The factory image fits the workflow angle.",
+  whyThisTweetWorks: "It keeps the post on product behavior instead of celebrity chatter.",
+  postingNotes: null
+};
+
 describe("topic composer prompts", () => {
   it("tells Gemini to load the stop-slop skill for planning", () => {
     const prompt = buildTopicPostPlanPrompt({ request, subject });
@@ -58,6 +66,8 @@ describe("topic composer prompts", () => {
     expect(prompt).toContain("Goal: product");
     expect(prompt).toContain("Treat product as a workflow or tooling lens.");
     expect(prompt).toContain("Prefer operational detail over executive or corporate theater.");
+    expect(prompt).toContain("Choose a feed-native post shape before you choose the angle.");
+    expect(prompt).toContain("Bad: 'The real shift is which defaults get baked into the toolchain.'");
   });
 
   it("passes the goal into final composition", () => {
@@ -73,5 +83,21 @@ describe("topic composer prompts", () => {
 
     expect(prompt).toContain("Goal: consequence");
     expect(prompt).toContain("A consequence post should foreground downstream effects");
+    expect(prompt).toContain("Favor caption voice, compressed takes, contrasts, institutional dunks, and workflow truths");
+    expect(prompt).toContain("Prefer native post openings like when / how / every time / guy who / quoted dialogue");
+  });
+
+  it("builds a cleanup pass that preserves selection and bans smart punctuation", () => {
+    const prompt = buildTopicPostCleanupPrompt({
+      request,
+      subject,
+      plan,
+      draft
+    });
+
+    expect(prompt).toContain("@.agents/skills/stop-slop/SKILL.md");
+    expect(prompt).toContain("Keep the same `selectedCandidateId` exactly.");
+    expect(prompt).toContain("Do not use em dashes, en dashes, curly quotes, or unicode ellipses.");
+    expect(prompt).toContain('"selectedCandidateId": "candidate-2"');
   });
 });

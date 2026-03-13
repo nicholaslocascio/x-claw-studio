@@ -84,4 +84,63 @@ describe("GeminiCliTopicComposerModel", () => {
       "AI storyboard chaos"
     ]);
   });
+
+  it("runs a cleanup pass before returning the final topic post draft", async () => {
+    runGeminiPromptMock
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          response: JSON.stringify({
+            tweetText: "The workflow shift isn't the press release—it’s the default stack that ships after it.",
+            selectedCandidateId: "candidate-1",
+            mediaSelectionReason: "The image keeps the focus on tooling.",
+            whyThisTweetWorks: "It reframes the story around product defaults.",
+            postingNotes: null
+          })
+        })
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          response: JSON.stringify({
+            tweetText: "The workflow shift isn't the press release-it's the default stack that ships after it.",
+            selectedCandidateId: null,
+            mediaSelectionReason: "The image keeps the focus on tooling.",
+            whyThisTweetWorks: "It reframes the story around product defaults.",
+            postingNotes: null
+          })
+        })
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          response: JSON.stringify({
+            tweetText: "the press release isn't the story. it's the stack that ships after it.",
+            selectedCandidateId: null,
+            mediaSelectionReason: "The image keeps the focus on tooling.",
+            whyThisTweetWorks: "It reframes the story around product defaults.",
+            postingNotes: null
+          })
+        })
+      );
+
+    const model = new GeminiCliTopicComposerModel();
+    const draft = await model.composePost({
+      request,
+      subject,
+      plan: {
+        angle: "The tooling shift matters more than the celebrity wrapper.",
+        tone: "sharp and specific",
+        postIntent: "Move the frame to workflow defaults.",
+        targetReaction: "Readers care more about the stack than the name.",
+        searchQueries: ["editing suite", "storyboard factory"],
+        candidateSelectionCriteria: ["supports workflow framing", "feels precise"],
+        avoid: ["celebrity recap"]
+      },
+      candidates: []
+    });
+
+    expect(runGeminiPromptMock).toHaveBeenCalledTimes(3);
+    expect(runGeminiPromptMock.mock.calls[1]?.[0]).toContain("cleaning a generated X post draft");
+    expect(runGeminiPromptMock.mock.calls[2]?.[0]).toContain("cleaning a generated X post draft");
+    expect(draft.selectedCandidateId).toBe("candidate-1");
+    expect(draft.tweetText).toBe("the press release isn't the story. it's the stack that ships after it.");
+  });
 });

@@ -6,7 +6,7 @@ This doc explains how data moves through the system.
 
 ```mermaid
 flowchart LR
-  A["npm run crawl:openclaw or crawl:timeline"] --> B["extract tweet + media metadata"]
+  A["npm run crawl:x-api or crawl:timeline"] --> B["fetch tweet + media metadata"]
   B --> C["persist intercepted images/posters when enabled (best-effort)"]
   C --> D["write data/raw/<run-id>/manifest.json"]
   D --> E["rebuild asset read model"]
@@ -16,9 +16,10 @@ flowchart LR
 
 Key files:
 
-- [`src/cli/crawl-openclaw.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-openclaw.ts)
+- [`src/cli/crawl-x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-x-api.ts)
+- [`src/server/x-api-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts)
+- [`src/server/x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts)
 - [`src/cli/crawl-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-timeline.ts)
-- [`src/server/openclaw-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/openclaw-capture.ts)
 - [`src/lib/extract-tweets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/extract-tweets.ts)
 
 Outputs:
@@ -30,9 +31,12 @@ Outputs:
 
 Important detail:
 
+- `crawl:x-api` is the primary home-timeline crawl command. `crawl:openclaw` remains as a compatibility alias. Home timeline capture calls `GET /2/users/:id/timelines/reverse_chronological`, and focused single-post capture calls `GET /2/tweets/:id`.
+- Timeline capture needs `X_BEARER_TOKEN` with user-context access. If `X_USER_ID` is not set, the capture path asks `/2/users/me` for the authenticated user id.
 - Auto-analysis after capture is now a detached follow-up process. Gemini failures or slowdowns should not fail the scrape once the manifest and asset rebuild have completed.
-- The run-control panel now also exposes a focused current-tweet capture that resets to the top of the tweet page, grabs the main tweet plus about 10 replies, and stops instead of continuing a long thread crawl.
-- A second focused action chains that tight capture into all-goals reply drafting, so the generated-drafts store gets one reply draft per reply goal for the captured top tweet.
+- Capture-triggered media refresh now defaults to an incremental asset sync: new usages are upserted into the existing asset index and only touched asset summaries are recomputed. Full corpus rebuilds are still available as an explicit maintenance operation.
+- The focused current-tweet capture now looks up one tweet by status URL and saves that post plus its assets into the raw manifest.
+- A second focused action chains that lookup into all-goals reply drafting, so the generated-drafts store gets one reply draft per reply goal for the captured top tweet.
 
 Maintenance:
 
@@ -167,7 +171,10 @@ Key files:
 ## App Read Path
 
 - [`app/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/page.tsx) reads the dashboard aggregate.
-- [`app/tweets/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/tweets/page.tsx) reuses the captured-tweets browser with an all-tweets default so text-only and media posts can be browsed together.
+- [`app/tweets/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/tweets/page.tsx) reuses the captured-tweets browser with an all-tweets default, but now applies search and media filters before serving 200-tweet pages so large crawls stay responsive.
+- [`app/replies/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/replies/page.tsx) is a dedicated reply workspace for one pasted X status URL, with local-first lookup and X API fallback before composition.
+- [`app/api/tweets/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/tweets/route.ts) exposes that same tweet-browser contract over HTTP with `page`, `limit`, `query`, and `filter` params, capped at 200 results per page.
+- [`src/cli/search-tweets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/search-tweets.ts) exposes the same listing flow in the terminal through `x-media-analyst search tweets`.
 - [`app/topics/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/topics/page.tsx) shows the full topic cluster set instead of the homepage slice.
 - [`app/api/search/topics/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/search/topics/route.ts) serves topic-search queries for the web app.
 - [`app/matches/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/matches/page.tsx) reuses the usage queue with matching filters.
@@ -234,16 +241,21 @@ Important detail:
 ```mermaid
 flowchart LR
   A["usage detail UI"] --> B["POST /api/reply/compose"]
-  B --> C["Gemini CLI headless plans angle + search queries"]
-  C --> D["shared media search runs facet retrieval plus imported meme templates"]
-  D --> E["Gemini CLI headless picks best candidate + writes reply text"]
-  E --> F["UI renders reply draft, selected media, and alternates"]
+  B --> C["load usage or first media usage for the tweet"]
+  C --> D["run usage analysis first when the source media is still pending"]
+  D --> E["Gemini CLI headless plans angle + search queries"]
+  E --> F["shared media search runs facet retrieval plus imported meme templates"]
+  F --> G["Gemini CLI headless picks best candidate + writes reply text"]
+  G --> H["Gemini CLI cleanup pass rewrites the draft with stop-slop"]
+  H --> I["UI renders reply draft, selected media, and alternates"]
 ```
 
 Key files:
 
+- [`app/api/reply/source/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/reply/source/route.ts)
 - [`app/api/reply/compose/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/reply/compose/route.ts)
 - [`src/server/reply-composer.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer.ts)
+- [`src/server/reply-composer-subject.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer-subject.ts)
 - [`src/server/reply-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer-model.ts)
 - [`src/server/reply-media-search.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-media-search.ts)
 - [`src/server/reply-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer-prompt.ts)
@@ -251,9 +263,40 @@ Key files:
 
 Important detail:
 
+- The dedicated reply lab resolves the pasted status URL first: normalize it, look for the tweet in local artifacts, and run focused X API capture only when the tweet is missing.
+- Once the tweet is present locally, subject resolution is shared with the rest of reply composition. Media-backed tweets still run the normal usage-analysis pipeline before drafting if their first usage is pending.
+- Text-only tweets still pass through this flow, but they skip media analysis and compose against the tweet text plus local media retrieval results.
 - This flow deliberately does not reuse the repo's Gemini API analysis path. Reply composition uses the installed `gemini` CLI in headless mode, while corpus retrieval still runs through the local `x-media-analyst search facets` CLI.
-- The Gemini CLI prompt tells `gemini` to load `@.agents/skills/stop-slop/SKILL.md` so the drafting pass uses the repo's prose-cleanup skill during planning and final composition.
+
+## Flow 8: Save A Draft To Typefully
+
+```mermaid
+flowchart LR
+  A["reply/topic/media draft card"] --> B["POST /api/typefully/draft"]
+  B --> C["optionally upload local media to Typefully"]
+  C --> D["poll media status until ready"]
+  D --> E["create Typefully X draft with text, media_ids, and optional reply_to_url or quote_post_url"]
+  E --> F["save Typefully draft links back into data/analysis/generated-drafts/index.json"]
+```
+
+Key files:
+
+- [`app/api/typefully/draft/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/typefully/draft/route.ts)
+- [`src/server/typefully.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/typefully.ts)
+- [`src/server/generated-drafts.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/generated-drafts.ts)
+- [`src/components/post-to-x-button.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/post-to-x-button.tsx)
+
+Important detail:
+
+- This path creates drafts only. Operators still approve or publish from Typefully itself.
+- The Typefully save control supports `reply`, `quote_post`, and `new_post`, with reply as the default when no mode is specified.
+- Replies use Typefully's `reply_to_url` setting, and quote posts use `quote_post_url`, so the draft stays anchored to a specific status URL without browser automation.
+- Media uploads follow Typefully's three-step flow: request upload URL, PUT raw bytes, then poll until the returned `media_id` is ready.
+- Media-post drafts that intentionally keep the current asset still persist that source file path into generated-draft history, so saving from `/drafts` does not drop the attachment.
+- When a reply starts from a media tweet whose first usage is still pending, the server now runs the normal usage-analysis pipeline before planning the reply so Gemini gets real tweet/media facets instead of the null fallback subject.
+- The Gemini CLI prompt tells `gemini` to load `@.agents/skills/stop-slop/SKILL.md` during planning, initial composition, and a dedicated cleanup pass that rewrites the final draft before it is accepted.
 - The final drafting prompt also tells `gemini` it may use the `nano-banana` skill to adapt an image candidate with caption text or simple meme edits when that makes the pairing land better.
+- After the cleanup call returns, the server also normalizes unicode punctuation locally so em dashes, curly quotes, and similar characters do not leak into saved drafts.
 - Imported meme templates under `data/analysis/meme-templates` now flow into the same candidate list as captured-media search results, so reply composition can choose a local template image even though those records are not part of Chroma facet indexing.
 - Wishlist asset import now tries meming.world first, then falls back to Gemini Google Search grounding plus generic webpage image extraction when no usable meming.world result exists.
 
@@ -281,12 +324,12 @@ Important detail:
 
 - Draft persistence is file-backed under `data/analysis/generated-drafts/index.json`.
 - Records are created when a compose job starts, updated as progress streams, and marked `complete` or `failed` at the end.
-- The reply composer reads recent reply history from that shared store, and `/drafts` shows all draft types in one place.
+- The reply composer reads recent reply history from that shared store, and `/drafts` is forced dynamic so fresh file-backed writes show up without waiting for a cached page to expire.
 - The planning step now sets an explicit reply stance (`agree`, `disagree`, or `mixed`) before retrieval. `critique` is intended to produce actual pushback rather than agreement in a meaner voice.
-- The compose route supports both a single selected goal and an `all_goals` batch mode. Batch mode runs each goal sequentially and streams per-goal progress back to the UI so operators can compare several reply/media pairings side by side.
+- The compose route supports both a single selected goal and an `all_goals` batch mode. Batch mode now loads the shared subject once, fans out goals in parallel up to the request's `maxConcurrency`, and streams running / queued / completed counters back to the UI so operators can compare several reply/media pairings side by side without losing track of the batch.
 - Reply composition can now start from either a media usage or a captured tweet without media. Text-only tweets still skip corpus analysis, but the reply composer can use the tweet text alone and optionally choose supporting media from the local corpus.
 - Every composer flow now appends its planned asset-retrieval terms to `data/analysis/reply-media-wishlist.json`, deduped by wishlist key so operators can grow one shared sourcing backlog even when some local matches already exist.
-- The server owns the orchestration as `plan -> search -> compose`, so Gemini-specific behavior stays behind the model adapter and can be swapped later without rewriting the UI.
+- The server owns the orchestration as `plan -> search -> compose -> cleanup`, so Gemini-specific behavior stays behind the model adapter and can be swapped later without rewriting the UI.
 
 ## Flow 8: Import A Wishlist Meme From Meming.world
 

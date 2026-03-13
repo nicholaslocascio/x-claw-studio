@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MediaPreview } from "@/src/components/media-preview";
+import { PostToXButton } from "@/src/components/post-to-x-button";
 import type { GeneratedDraftRecord } from "@/src/lib/generated-drafts";
 import { readNdjsonStream } from "@/src/lib/ndjson-stream";
 import type {
@@ -34,7 +35,9 @@ export function ReplyComposer(props: {
   tweetId?: string | null;
   subject: ReplyComposerSubject;
 }) {
+  const maxGoalConcurrency = GOAL_OPTIONS.length;
   const [goal, setGoal] = useState<ReplyCompositionGoal>("insight");
+  const [maxConcurrency, setMaxConcurrency] = useState(Math.min(2, maxGoalConcurrency));
   const [toneHint, setToneHint] = useState("sharp but grounded");
   const [angleHint, setAngleHint] = useState("");
   const [constraints, setConstraints] = useState("keep it tight and postable");
@@ -48,6 +51,8 @@ export function ReplyComposer(props: {
   const latestProgress = progressEvents.at(-1) ?? null;
   const completedGoals = latestProgress?.completedGoals ?? 0;
   const totalGoals = latestProgress?.totalGoals ?? (runMode === "all_goals" ? GOAL_OPTIONS.length : 1);
+  const runningGoals = latestProgress?.runningGoals ?? (runMode === "all_goals" && isRunning ? 1 : 0);
+  const queuedGoals = latestProgress?.queuedGoals ?? Math.max(0, totalGoals - completedGoals - runningGoals);
 
   async function loadDraftHistory(): Promise<void> {
     const params = new URLSearchParams({
@@ -70,7 +75,35 @@ export function ReplyComposer(props: {
   }
 
   useEffect(() => {
-    void loadDraftHistory();
+    let isCancelled = false;
+
+    async function run(): Promise<void> {
+      const params = new URLSearchParams({
+        kind: "reply",
+        limit: "12"
+      });
+      if (props.usageId) {
+        params.set("usageId", props.usageId);
+      } else if (props.tweetId) {
+        params.set("tweetId", props.tweetId);
+      }
+
+      const response = await fetch(`/api/generated-drafts?${params.toString()}`);
+      if (!response.ok || isCancelled) {
+        return;
+      }
+
+      const body = await response.json();
+      if (!isCancelled) {
+        setDraftHistory(body.drafts ?? []);
+      }
+    }
+
+    void run();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [props.tweetId, props.usageId]);
 
   async function composeReply(mode: ReplyCompositionMode): Promise<void> {
@@ -110,7 +143,8 @@ export function ReplyComposer(props: {
         mode,
         toneHint,
         angleHint,
-        constraints
+        constraints,
+        maxConcurrency: mode === "all_goals" ? maxConcurrency : undefined
       })
     });
 
@@ -260,9 +294,29 @@ export function ReplyComposer(props: {
                 />
               </label>
 
+              <label className="tt-field">
+                <span className="tt-field-label">All-Goals Concurrency</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={maxGoalConcurrency}
+                  value={maxConcurrency}
+                  onChange={(event) => {
+                    const nextValue = Number.parseInt(event.target.value, 10);
+                    if (Number.isNaN(nextValue)) {
+                      setMaxConcurrency(1);
+                      return;
+                    }
+
+                    setMaxConcurrency(Math.max(1, Math.min(maxGoalConcurrency, nextValue)));
+                  }}
+                  className="tt-input"
+                />
+              </label>
+
               <div className="tt-subpanel-soft">
                 <p className="tt-copy">
-                  The server asks `gemini` for a reply plan, runs `x-media-analyst search facets` with those queries, then asks `gemini` again to choose the best candidate and draft the final reply.
+                  The server asks `gemini` for a reply plan, runs `x-media-analyst search facets` with those queries, then asks `gemini` again to choose the best candidate and draft the final reply. `Compose all goals` reuses the same subject context once, then fans out across goals up to this concurrency cap.
                 </p>
               </div>
 
@@ -332,7 +386,9 @@ export function ReplyComposer(props: {
                 <div className="tt-data-label">Current Step</div>
                 <p className="mt-2 text-sm leading-6 text-slate-200">{latestProgress?.message ?? "Starting compose pipeline"}</p>
                 <p className="mt-3 text-sm leading-6 text-slate-200">
-                  {runMode === "all_goals" ? `Completed ${completedGoals} of ${totalGoals} goals` : "Running selected goal"}
+                  {runMode === "all_goals"
+                    ? `${runningGoals} running, ${queuedGoals} queued, ${completedGoals} of ${totalGoals} completed`
+                    : "Running selected goal"}
                 </p>
                 {latestProgress?.detail ? (
                   <p className="mt-3 break-words font-[family:var(--font-mono)] text-xs uppercase tracking-[0.12em] text-cyan">
@@ -353,7 +409,11 @@ export function ReplyComposer(props: {
                   <div key={`${event.stage}-${index}`} className="tt-subpanel-soft">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="tt-data-label">{event.goal ? `${event.goal} • ${event.stage}` : event.stage}</div>
-                      <div className="tt-chip tt-chip-accent">step {index + 1}</div>
+                      <div className="tt-chip tt-chip-accent">
+                        {typeof event.runningGoals === "number" && typeof event.queuedGoals === "number"
+                          ? `${event.runningGoals} run / ${event.queuedGoals} queue`
+                          : `step ${index + 1}`}
+                      </div>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-200">{event.message}</p>
                     {event.detail ? (
@@ -400,6 +460,15 @@ export function ReplyComposer(props: {
                     <div className="tt-subpanel">
                       <p className="text-base leading-7 text-slate-100">{item.reply.text}</p>
                     </div>
+
+                    <PostToXButton
+                      mode="reply"
+                      text={item.reply.text}
+                      mediaFilePath={item.selectedMedia?.videoFilePath ?? item.selectedMedia?.localFilePath ?? null}
+                      replyToTweetUrl={item.subject.tweetUrl}
+                      draftTitle={`${item.request.goal} reply`}
+                      scratchpadText={item.reply.postingNotes ?? item.reply.whyThisReplyWorks}
+                    />
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="tt-subpanel-soft">
@@ -551,6 +620,24 @@ export function ReplyComposer(props: {
                         </div>
                         <p className="text-sm leading-7 text-slate-100">{output.text}</p>
                         {output.mediaSelectionReason ? <p className="mt-2 text-sm leading-6 text-slate-300">{output.mediaSelectionReason}</p> : null}
+                        <div className="mt-3">
+                          <PostToXButton
+                            mode="reply"
+                            text={output.text}
+                            mediaFilePath={output.selectedMediaVideoFilePath ?? output.selectedMediaLocalFilePath ?? null}
+                            replyToTweetUrl={props.subject.tweetUrl}
+                            draftTitle={output.goal ? `${output.goal} reply` : "reply draft"}
+                            scratchpadText={output.postingNotes ?? output.whyThisWorks}
+                            draftId={draft.draftId}
+                            outputIndex={index}
+                            initialSavedAt={output.typefullySavedAt}
+                            initialPrivateUrl={output.typefullyPrivateUrl}
+                            initialShareUrl={output.typefullyShareUrl}
+                            initialDraftStatus={output.typefullyStatus}
+                            initialDraftId={output.typefullyDraftId}
+                            initialError={output.typefullyError}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>

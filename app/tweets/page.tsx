@@ -1,9 +1,24 @@
 import Link from "next/link";
 import { CapturedTweetQueue } from "@/src/components/captured-tweet-queue";
-import { getDashboardData } from "@/src/server/data";
+import { CAPTURED_TWEET_PAGE_SIZE, getCapturedTweetPage, getDashboardData } from "@/src/server/data";
 
-export default function TweetsPage() {
+export default async function TweetsPage(props: {
+  searchParams?: Promise<{
+    page?: string;
+    query?: string;
+    filter?: string;
+  }>;
+}) {
   const data = getDashboardData();
+  const searchParams = (await props.searchParams) ?? {};
+  const page = Number.parseInt(searchParams.page ?? "1", 10);
+  const pagedTweets = getCapturedTweetPage({
+    tweets: data.capturedTweets,
+    page: Number.isFinite(page) ? page : 1,
+    pageSize: CAPTURED_TWEET_PAGE_SIZE,
+    query: searchParams.query,
+    tweetFilter: searchParams.filter
+  });
 
   return (
     <main className="app-shell">
@@ -35,13 +50,19 @@ export default function TweetsPage() {
             <Link href="/" className="tt-link">
               <span>Back to dashboard</span>
             </Link>
+            <Link href="/replies" className="tt-link">
+              <span>Open reply lab</span>
+            </Link>
           </div>
         </div>
       </section>
 
       <CapturedTweetQueue
-        tweets={data.capturedTweets}
-        initialTweetFilter="all"
+        key={`${pagedTweets.page}:${pagedTweets.tweetFilter}:${pagedTweets.query}`}
+        tweets={pagedTweets.tweets}
+        initialTweetFilter={pagedTweets.tweetFilter}
+        initialQuery={pagedTweets.query}
+        pagination={pagedTweets}
         sectionLabel="Tweet Browser"
         sectionTitle="Browse every captured tweet and open the reply composer from one place"
         sectionDescription="Search the full crawl, switch between media and text-only posts, and open reply drafting without bouncing between queue views."

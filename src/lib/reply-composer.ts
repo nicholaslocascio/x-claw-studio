@@ -16,6 +16,7 @@ export const replyCompositionRequestSchema = z.object({
   tweetId: z.string().min(1).optional(),
   goal: z.enum(REPLY_COMPOSITION_GOALS).default("insight"),
   mode: z.enum(["single", "all_goals"]).default("single"),
+  maxConcurrency: z.coerce.number().int().min(1).max(REPLY_COMPOSITION_GOALS.length).optional(),
   toneHint: z.string().trim().max(120).optional(),
   angleHint: z.string().trim().max(280).optional(),
   constraints: z.string().trim().max(280).optional()
@@ -29,6 +30,12 @@ export const replyCompositionRequestSchema = z.object({
 });
 
 export type ReplyCompositionRequest = z.infer<typeof replyCompositionRequestSchema>;
+
+export const replySourceLookupRequestSchema = z.object({
+  xUrl: z.string().trim().min(1, "An X status URL is required")
+});
+
+export type ReplySourceLookupRequest = z.infer<typeof replySourceLookupRequestSchema>;
 
 export const replyCompositionPlanSchema = z.object({
   stance: z.enum(["agree", "disagree", "mixed"]),
@@ -134,8 +141,18 @@ export interface ReplyCompositionBatchResult {
   results: ReplyCompositionResult[];
 }
 
+export interface ReplySourceLookupResult {
+  normalizedUrl: string;
+  tweetId: string;
+  usageId: string | null;
+  source: "local" | "x_api";
+  analysisStatus: "complete" | "not_applicable";
+  subject: ReplyComposerSubject;
+}
+
 export type ReplyCompositionStage =
   | "starting"
+  | "analyzing"
   | "planning"
   | "searching"
   | "composing"
@@ -148,6 +165,8 @@ export interface ReplyCompositionProgressEvent {
   goal?: ReplyCompositionGoal | null;
   completedGoals?: number;
   totalGoals?: number;
+  runningGoals?: number;
+  queuedGoals?: number;
 }
 
 export interface DesiredReplyMediaWishlistEntry {

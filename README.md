@@ -22,8 +22,8 @@ This scaffold is built around two levels of storage:
 Implemented now:
 
 - a TypeScript Next.js dashboard for browsing capture and future analysis stages
+- an X API capture path for home timeline pulls and single-post lookup by status URL
 - a Playwright crawler scaffold that scrolls the timeline and captures tweet HTML
-- an OpenClaw extension-backed crawler that uses your existing Chrome session/tab
 - response interception for `pbs.twimg.com` and `video.twimg.com`
 - poster-first capture policy for videos: save poster now, keep video URL metadata, defer full video download
 - Gemini multimodal analysis for a single tweet-media usage
@@ -40,7 +40,7 @@ Not implemented yet:
 
 ### 1. Capture layer
 
-Preferred: use the OpenClaw Chrome extension against your existing attached Chrome tab.
+Preferred: use the X API capture path for home timeline pulls and single-post lookups.
 
 Fallback: use Playwright against a logged-in local browser session.
 
@@ -183,6 +183,7 @@ Examples:
 
 ```bash
 x-media-analyst facet list
+x-media-analyst search tweets --query "mask reveal" --filter with_media --page 2 --limit 50
 x-media-analyst search facets --query "terminal dashboard" --facet scene_description --limit 5
 x-media-analyst search facets --query "reaction image" --format jsonl
 x-media-analyst app dev
@@ -197,11 +198,17 @@ x-media-analyst run stack
 - matched facet names, descriptions, and values
 - full saved analysis payloads for each matching usage
 
+`x-media-analyst search tweets` returns:
+
+- paginated captured tweets with `page`, `limit`, `total_results`, and `total_pages`
+- counts for `all`, `with_media`, and `without_media`
+- tweet metadata, media counts, and topic labels for each result
+
 ## Run control and scheduling
 
 The dashboard now includes:
 
-- manual trigger buttons for `crawl_openclaw`, `crawl_timeline`, `analyze_missing`, and `rebuild_media_assets`
+- manual trigger buttons for `crawl_x_api`, `crawl_timeline`, `analyze_missing`, and `rebuild_media_assets`
 - persisted run history with status, timestamps, and per-run log files
 - error visibility for failed runs
 - a daily scheduler config that supports one or more local run times when enabled
@@ -236,18 +243,12 @@ make daily-poll
 
 ## Running the crawler
 
-Preferred extension-backed crawl:
+Primary API-backed crawl:
 
 ```bash
+npm run crawl:x-api
 npm run crawl:openclaw
 ```
-
-Required attach flow for `crawl:openclaw`:
-
-1. Load the OpenClaw Chrome extension in your normal Chrome.
-2. Open the X tab you want to crawl.
-3. Click the extension icon so the badge shows `ON`.
-4. Verify `openclaw browser --browser-profile chrome tabs --json` shows that attached tab.
 
 Fallback Playwright crawl:
 
@@ -261,21 +262,10 @@ Optional env:
 MAX_SCROLLS=50 SCROLL_PAUSE_MS=3000 npm run crawl:timeline
 ```
 
-OpenClaw humanizer tuning:
-
-```bash
-SCROLL_STEP_MIN_PX=260
-SCROLL_STEP_MAX_PX=720
-SCROLL_STEPS_MIN=3
-SCROLL_STEPS_MAX=6
-SCROLL_STEP_PAUSE_MIN_MS=500
-SCROLL_STEP_PAUSE_MAX_MS=1400
-```
-
 Notes:
 
-- the OpenClaw extension path is the safer/default path because it uses your existing Chrome session instead of a fresh automated browser context
-- `crawl:openclaw` fails fast if no attached X tab is available on the `chrome` profile
+- `crawl:x-api` is the primary command for the main X API capture path
+- `crawl:openclaw` remains as a compatibility alias
 - both crawl paths refresh the page as the first action, then use the shared scroll humanizer so capture timing and scroll direction are less rigid
 - by default both crawl paths auto-run missing analysis after the crawl completes; set `AUTO_ANALYZE_AFTER_CRAWL=0` to disable that
 - the crawler launches Chromium non-headless so you can validate login state

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { hammingDistanceHex } from "@/src/server/media-fingerprint";
-import { mergeExistingMediaAssetState, shouldPromoteMediaAssetVideo, summarizeAnalyses } from "@/src/server/media-assets";
+import {
+  mergeExistingMediaAssetState,
+  resolveMediaAssetSyncUsageIds,
+  shouldPromoteMediaAssetVideo,
+  summarizeAnalyses
+} from "@/src/server/media-assets";
 import type { MediaAssetRecord, UsageAnalysis } from "@/src/lib/types";
 
 function buildAnalysis(overrides: Partial<UsageAnalysis>): UsageAnalysis {
@@ -186,5 +191,33 @@ describe("mergeExistingMediaAssetState", () => {
     expect(merged.promotedVideoSourceUrl).toBe("https://video.twimg.com/example.m3u8");
     expect(merged.promotedVideoFilePath).toBe("data/analysis/media-assets/videos/asset-video.mp4");
     expect(merged.createdAt).toBe(new Date(0).toISOString());
+  });
+});
+
+describe("resolveMediaAssetSyncUsageIds", () => {
+  it("processes only usages missing from the existing index during incremental sync", () => {
+    const usageIds = resolveMediaAssetSyncUsageIds({
+      usages: [{ usageId: "usage-a" }, { usageId: "usage-b" }, { usageId: "usage-c" }] as Array<{ usageId: string }>,
+      existingUsageToAssetId: {
+        "usage-a": "asset-1",
+        "usage-b": "asset-missing"
+      },
+      existingAssetIds: ["asset-1"]
+    });
+
+    expect(usageIds).toEqual(["usage-b", "usage-c"]);
+  });
+
+  it("honors explicit usage ids for focused sync runs", () => {
+    const usageIds = resolveMediaAssetSyncUsageIds({
+      usages: [{ usageId: "usage-a" }, { usageId: "usage-b" }, { usageId: "usage-c" }] as Array<{ usageId: string }>,
+      existingUsageToAssetId: {
+        "usage-a": "asset-1"
+      },
+      existingAssetIds: ["asset-1"],
+      requestedUsageIds: ["usage-c", "usage-a"]
+    });
+
+    expect(usageIds).toEqual(["usage-a", "usage-c"]);
   });
 });

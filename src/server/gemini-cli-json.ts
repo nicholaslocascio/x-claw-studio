@@ -6,6 +6,7 @@ import { runCliCommand } from "@/src/server/cli-process";
 const cliFilePath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(cliFilePath), "..", "..");
 const geminiCliPath = process.env.GEMINI_CLI_PATH || "gemini";
+const geminiCliModel = process.env.GEMINI_CLI_MODEL || "gemini-2.5-flash";
 const geminiTimeoutMs = Number(process.env.GEMINI_CLI_TIMEOUT_MS || 120_000);
 
 function stripMarkdownFences(value: string): string {
@@ -55,7 +56,7 @@ export function parseGeminiJsonResponse<T>(stdout: string, parse: (value: unknow
 export async function runGeminiPrompt(prompt: string): Promise<string> {
   const result = await runCliCommand({
     command: geminiCliPath,
-    args: ["--output-format", "json", "-p", prompt],
+    args: ["--output-format", "json", "-m", geminiCliModel, "-p", prompt],
     cwd: repoRoot,
     env: {
       ...process.env,

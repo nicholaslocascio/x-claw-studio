@@ -36,6 +36,19 @@ interface MediaAssetSummaryFile {
   summaries: MediaAssetSummary[];
 }
 
+export interface MediaAssetIndexSyncResult {
+  index: MediaAssetIndexFile;
+  processedUsageIds: string[];
+  touchedAssetIds: string[];
+  mode: "incremental" | "full_rebuild";
+}
+
+export interface MediaAssetSummarySyncResult {
+  file: MediaAssetSummaryFile;
+  touchedAssetIds: string[];
+  mode: "incremental" | "full_rebuild";
+}
+
 interface MediaAssetStarsFile {
   updatedAt: string;
   starredAssetIds: string[];
@@ -365,6 +378,39 @@ function buildMediaCandidates(usages: TweetUsageRecord[], manifests: CrawlManife
   }));
 }
 
+export function collectMediaUsageIdsFromTweets(tweets: ExtractedTweet[]): string[] {
+  return tweets.flatMap((tweet) => tweet.media.map((_media, mediaIndex) => buildUsageId(tweet, mediaIndex)));
+}
+
+export function resolveMediaAssetSyncUsageIds(input: {
+  usages: Array<Pick<TweetUsageRecord, "usageId">>;
+  existingUsageToAssetId?: Record<string, string> | null;
+  existingAssetIds?: Iterable<string>;
+  requestedUsageIds?: string[] | null;
+  forceFullRebuild?: boolean;
+}): string[] {
+  const usageIdsInOrder = input.usages.map((usage) => usage.usageId);
+  const requestedUsageIds = input.requestedUsageIds?.filter(Boolean) ?? [];
+  const hasExplicitRequestedUsageIds = input.requestedUsageIds != null;
+  if (input.forceFullRebuild) {
+    return requestedUsageIds.length > 0
+      ? usageIdsInOrder.filter((usageId) => requestedUsageIds.includes(usageId))
+      : usageIdsInOrder;
+  }
+
+  if (hasExplicitRequestedUsageIds) {
+    const requestedSet = new Set(requestedUsageIds);
+    return usageIdsInOrder.filter((usageId) => requestedSet.has(usageId));
+  }
+
+  const existingUsageToAssetId = input.existingUsageToAssetId ?? {};
+  const existingAssetIds = new Set(input.existingAssetIds ?? []);
+  return usageIdsInOrder.filter((usageId) => {
+    const assetId = existingUsageToAssetId[usageId];
+    return !assetId || !existingAssetIds.has(assetId);
+  });
+}
+
 function buildUsageGroups(usages: TweetUsageRecord[]): Map<string, TweetUsageRecord[]> {
   const usageGroups = new Map<string, TweetUsageRecord[]>();
 
@@ -385,13 +431,63 @@ export async function buildMediaAssetIndex(input: {
   usages: TweetUsageRecord[];
   manifests: CrawlManifest[];
 }): Promise<MediaAssetIndexFile> {
-  const candidates = buildMediaCandidates(input.usages, input.manifests);
-  const existingIndex = readJsonFile<MediaAssetIndexFile>(assetIndexPath);
+  const result = await syncMediaAssetIndex({
+    usages: input.usages,
+    manifests: input.manifests,
+    forceFullRebuild: true
+  });
+
+  return result.index;
+}
+
+export async function syncMediaAssetIndex(input: {
+  usages: TweetUsageRecord[];
+  manifests: CrawlManifest[];
+  usageIds?: string[] | null;
+  forceFullRebuild?: boolean;
+}): Promise<MediaAssetIndexSyncResult> {
+  const forceFullRebuild = input.forceFullRebuild === true;
+  const existingIndex = forceFullRebuild ? null : readJsonFile<MediaAssetIndexFile>(assetIndexPath);
   const existingAssetsById = new Map((existingIndex?.assets ?? []).map((asset) => [asset.assetId, asset]));
-  const assets: MediaAssetRecord[] = [];
-  const usageToAssetId: Record<string, string> = {};
+  const usageIdsToProcess = resolveMediaAssetSyncUsageIds({
+    usages: input.usages,
+    existingUsageToAssetId: existingIndex?.usageToAssetId ?? null,
+    existingAssetIds: existingAssetsById.keys(),
+    requestedUsageIds: input.usageIds ?? null,
+    forceFullRebuild
+  });
+  if (!forceFullRebuild && usageIdsToProcess.length === 0 && existingIndex) {
+    return {
+      index: readMediaAssetIndex() ?? {
+        generatedAt: existingIndex.generatedAt,
+        assets: hydrateAssetsWithStars(existingIndex.assets),
+        usageToAssetId: { ...existingIndex.usageToAssetId }
+      },
+      processedUsageIds: [],
+      touchedAssetIds: [],
+      mode: "incremental"
+    };
+  }
+  const usageIdsToProcessSet = new Set(usageIdsToProcess);
+  const candidates = buildMediaCandidates(
+    input.usages.filter((usage) => usageIdsToProcessSet.has(usage.usageId)),
+    input.manifests
+  );
+  const assets: MediaAssetRecord[] = forceFullRebuild
+    ? []
+    : hydrateAssetsWithStars((existingIndex?.assets ?? []).map((asset) => ({
+        ...asset,
+        usageIds: [...asset.usageIds],
+        sourceUrls: [...asset.sourceUrls],
+        previewUrls: [...asset.previewUrls],
+        posterUrls: [...asset.posterUrls]
+      })));
+  const usageToAssetId: Record<string, string> = forceFullRebuild
+    ? {}
+    : { ...(existingIndex?.usageToAssetId ?? {}) };
   const now = new Date().toISOString();
   const starredAssetIds = readStarredAssetIds();
+  const touchedAssetIds = new Set<string>();
 
   for (const candidate of candidates) {
     const fingerprint = candidate.filePath ? await computeDifferenceHash(candidate.filePath) : null;
@@ -411,7 +507,14 @@ export async function buildMediaAssetIndex(input: {
       }
       if (candidate.media.previewUrl) matched.previewUrls.push(candidate.media.previewUrl);
       if (candidate.media.posterUrl) matched.posterUrls.push(candidate.media.posterUrl);
+      if (!matched.canonicalMediaUrl) {
+        matched.canonicalMediaUrl = normalizeMediaUrl(candidate.media);
+      }
+      if (!matched.canonicalFilePath && candidate.filePath) {
+        matched.canonicalFilePath = path.relative(projectRoot, candidate.filePath);
+      }
       usageToAssetId[candidate.usageId] = matched.assetId;
+      touchedAssetIds.add(matched.assetId);
       continue;
     }
 
@@ -439,6 +542,7 @@ export async function buildMediaAssetIndex(input: {
 
     assets.push(record);
     usageToAssetId[candidate.usageId] = assetId;
+    touchedAssetIds.add(assetId);
   }
 
   const dedupe = (values: string[]) => Array.from(new Set(values));
@@ -461,6 +565,10 @@ export async function buildMediaAssetIndex(input: {
 
   for (let assetIndex = 0; assetIndex < assets.length; assetIndex += 1) {
     const asset = assets[assetIndex];
+    if (!forceFullRebuild && !touchedAssetIds.has(asset.assetId)) {
+      continue;
+    }
+
     const duplicateGroupUsageCount = asset.usageIds.reduce((max, usageId) => {
       const duplicateGroup = duplicateGroupMap[usageId];
       return Math.max(max, duplicateGroup?.usageIds.length ?? asset.usageIds.length);
@@ -491,13 +599,34 @@ export async function buildMediaAssetIndex(input: {
 
   ensureDir(assetDir);
   writeJson(assetIndexPath, index);
-  return index;
+  return {
+    index,
+    processedUsageIds: usageIdsToProcess,
+    touchedAssetIds: Array.from(touchedAssetIds).sort(),
+    mode: forceFullRebuild ? "full_rebuild" : "incremental"
+  };
 }
 
 export function buildMediaAssetSummaries(input: {
   usages: TweetUsageRecord[];
   assetIndex: MediaAssetIndexFile;
 }): MediaAssetSummaryFile {
+  const result = syncMediaAssetSummaries({
+    usages: input.usages,
+    assetIndex: input.assetIndex,
+    forceFullRebuild: true
+  });
+
+  return result.file;
+}
+
+export function syncMediaAssetSummaries(input: {
+  usages: TweetUsageRecord[];
+  assetIndex: MediaAssetIndexFile;
+  assetIds?: string[] | null;
+  forceFullRebuild?: boolean;
+}): MediaAssetSummarySyncResult {
+  const forceFullRebuild = input.forceFullRebuild === true;
   const analysisMap = new Map(readAllUsageAnalyses().map((analysis) => [analysis.usageId, analysis]));
   const assetVideoAnalysisMap = new Map(
     readAllAssetVideoAnalyses().map((analysis) => [analysis.usageId.replace("::video", ""), analysis])
@@ -511,7 +640,29 @@ export function buildMediaAssetSummaries(input: {
       filePath: null
     })])
   );
+  const existingSummaryFile = forceFullRebuild ? null : readJsonFile<MediaAssetSummaryFile>(assetSummaryPath);
+  const existingSummaryMap = new Map((existingSummaryFile?.summaries ?? []).map((summary) => [summary.assetId, summary]));
+  const requestedAssetIds = input.assetIds?.filter(Boolean) ?? [];
+  const hasExplicitAssetIds = input.assetIds != null;
+  const touchedAssetIdSet = new Set(
+    forceFullRebuild
+      ? input.assetIndex.assets.map((asset) => asset.assetId)
+      : hasExplicitAssetIds
+        ? requestedAssetIds
+        : input.assetIndex.assets.map((asset) => asset.assetId)
+  );
+  if (!forceFullRebuild && touchedAssetIdSet.size === 0 && existingSummaryFile) {
+    return {
+      file: existingSummaryFile,
+      touchedAssetIds: [],
+      mode: "incremental"
+    };
+  }
   const summaries = input.assetIndex.assets.map((asset) => {
+    if (!forceFullRebuild && !touchedAssetIdSet.has(asset.assetId)) {
+      return existingSummaryMap.get(asset.assetId) ?? null;
+    }
+
     const preferredVideoAnalysis = assetVideoAnalysisMap.get(asset.assetId) ?? null;
     const sourceAnalyses = preferredVideoAnalysis
       ? [preferredVideoAnalysis]
@@ -525,7 +676,7 @@ export function buildMediaAssetSummaries(input: {
         ? 1
         : sourceAnalyses.filter((analysis) => analysis?.status === "complete").length
     };
-  });
+  }).filter((summary): summary is MediaAssetSummary => Boolean(summary));
 
   const file: MediaAssetSummaryFile = {
     generatedAt: new Date().toISOString(),
@@ -534,7 +685,11 @@ export function buildMediaAssetSummaries(input: {
 
   ensureDir(assetDir);
   writeJson(assetSummaryPath, file);
-  return file;
+  return {
+    file,
+    touchedAssetIds: Array.from(touchedAssetIdSet).sort(),
+    mode: forceFullRebuild ? "full_rebuild" : "incremental"
+  };
 }
 
 export function readMediaAssetIndex(): MediaAssetIndexFile | null {

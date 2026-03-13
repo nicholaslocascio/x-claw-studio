@@ -34,3 +34,13 @@ export function getPreferredXStatusUrl(value: string | null | undefined): string
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 }
+
+export function extractTweetIdFromStatusUrl(value: string | null | undefined): string | null {
+  const normalized = normalizeXStatusUrl(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const match = normalized.match(/\/status\/(\d+)$/);
+  return match?.[1] ?? null;
+}

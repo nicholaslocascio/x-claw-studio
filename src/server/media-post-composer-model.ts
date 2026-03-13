@@ -8,7 +8,12 @@ import {
 } from "@/src/lib/media-post-composer";
 import type { ReplyMediaCandidate } from "@/src/lib/reply-composer";
 import { parseGeminiJsonResponse, runGeminiPrompt } from "@/src/server/gemini-cli-json";
-import { buildMediaPostPlanPrompt, buildMediaPostPrompt } from "@/src/server/media-post-composer-prompt";
+import {
+  buildMediaPostCleanupPrompt,
+  buildMediaPostPlanPrompt,
+  buildMediaPostPrompt
+} from "@/src/server/media-post-composer-prompt";
+import { looksTooAnalyticalForPost, normalizeDraftStrings } from "@/src/server/prose-cleaner";
 
 export interface MediaPostComposerModel {
   providerId: string;
@@ -42,7 +47,39 @@ export class GeminiCliMediaPostComposerModel implements MediaPostComposerModel {
     candidates: ReplyMediaCandidate[];
   }): Promise<MediaPostDraft> {
     const stdout = await runGeminiPrompt(buildMediaPostPrompt(input));
-    return parseGeminiJsonResponse(stdout, (value) => mediaPostDraftSchema.parse(value));
+    const draft = parseGeminiJsonResponse(stdout, (value) => mediaPostDraftSchema.parse(value));
+    const cleanupStdout = await runGeminiPrompt(
+      buildMediaPostCleanupPrompt({
+        request: input.request,
+        subject: input.subject,
+        plan: input.plan,
+        draft
+      })
+    );
+    const cleanedDraft = parseGeminiJsonResponse(cleanupStdout, (value) => mediaPostDraftSchema.parse(value));
+    const maybeNormalized = normalizeDraftStrings({
+      ...cleanedDraft,
+      selectedCandidateId: draft.selectedCandidateId
+    });
+
+    if (!looksTooAnalyticalForPost(maybeNormalized.tweetText)) {
+      return maybeNormalized;
+    }
+
+    const finalCleanupStdout = await runGeminiPrompt(
+      buildMediaPostCleanupPrompt({
+        request: input.request,
+        subject: input.subject,
+        plan: input.plan,
+        draft: maybeNormalized
+      })
+    );
+    const finalDraft = parseGeminiJsonResponse(finalCleanupStdout, (value) => mediaPostDraftSchema.parse(value));
+
+    return normalizeDraftStrings({
+      ...finalDraft,
+      selectedCandidateId: draft.selectedCandidateId
+    });
   }
 }
 

@@ -41,6 +41,9 @@ export default async function HomePage() {
             <Link href="/tweets" className="tt-button">
               <span>Tweets</span>
             </Link>
+            <Link href="/replies" className="tt-button">
+              <span>Replies</span>
+            </Link>
             <Link href="/matches" className="tt-button">
               <span>Matches</span>
             </Link>
@@ -83,6 +86,9 @@ export default async function HomePage() {
                   </a>
                   <Link href="/tweets" className="tt-link">
                     <span>Browse tweets</span>
+                  </Link>
+                  <Link href="/replies" className="tt-link">
+                    <span>Open reply lab</span>
                   </Link>
                   <Link href="/wishlist" className="tt-link">
                     <span>Open wishlist</span>
@@ -266,7 +272,7 @@ export default async function HomePage() {
           <div className="grid gap-3 lg:grid-cols-2">
             {data.manifests.length === 0 ? (
               <article className="neon-card">
-                <div className="tt-placeholder">No live crawl manifests yet. Run `npm run crawl:openclaw`.</div>
+                <div className="tt-placeholder">No crawl manifests yet. Run `npm run crawl:x-api` to pull the home timeline through the X API.</div>
               </article>
             ) : (
               data.manifests.map((manifest) => (

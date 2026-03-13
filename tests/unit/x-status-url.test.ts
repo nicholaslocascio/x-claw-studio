@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isXStatusUrl, normalizeXStatusUrl } from "@/src/lib/x-status-url";
+import { extractTweetIdFromStatusUrl, isXStatusUrl, normalizeXStatusUrl } from "@/src/lib/x-status-url";
 
 describe("normalizeXStatusUrl", () => {
   it("normalizes x.com status URLs and strips query params", () => {
@@ -17,5 +17,11 @@ describe("normalizeXStatusUrl", () => {
   it("rejects non-status URLs", () => {
     expect(normalizeXStatusUrl("https://x.com/home")).toBeNull();
     expect(isXStatusUrl("https://x.com/home")).toBe(false);
+  });
+
+  it("extracts the tweet id from a normalized status URL", () => {
+    expect(extractTweetIdFromStatusUrl("https://x.com/litteralyme0/status/2031185321342210442?t=abc")).toBe(
+      "2031185321342210442"
+    );
   });
 });

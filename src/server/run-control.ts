@@ -29,12 +29,12 @@ const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
 
 const TASK_TO_COMMAND: Record<RunTask, { command: string; args: string[] }> = {
   crawl_timeline: { command: "npm", args: ["run", "crawl:timeline"] },
-  crawl_openclaw: { command: "npm", args: ["run", "crawl:openclaw"] },
-  capture_openclaw_current: { command: "npm", args: ["run", "capture:openclaw-current"] },
-  capture_openclaw_current_tweet: { command: "npm", args: ["run", "capture:openclaw-current-tweet"] },
-  capture_openclaw_current_tweet_and_compose_replies: {
+  crawl_x_api: { command: "npm", args: ["run", "crawl:x-api"] },
+  capture_x_api_timeline: { command: "npm", args: ["run", "capture:x-api-timeline"] },
+  capture_x_api_tweet: { command: "npm", args: ["run", "capture:x-api-tweet"] },
+  capture_x_api_tweet_and_compose_replies: {
     command: "npm",
-    args: ["run", "capture:openclaw-current-tweet-and-compose-replies"]
+    args: ["run", "capture:x-api-tweet-and-compose-replies"]
   },
   analyze_missing: { command: "npm", args: ["run", "analyze:missing"] },
   analyze_topics: { command: "npm", args: ["run", "analyze:topics"] },
@@ -343,9 +343,7 @@ export function triggerTask(
   task: RunTask,
   trigger: "manual" | "scheduled",
   options?: {
-    openclawTargetTabIndex?: number | null;
-    openclawKeepScrollPosition?: boolean;
-    openclawStartUrl?: string | null;
+    xStatusUrl?: string | null;
     topicBatchLimit?: number | null;
   }
 ): RunHistoryEntry {
@@ -370,14 +368,8 @@ export function triggerTask(
   const entries = readRunHistory();
   writeRunHistory([historyEntry, ...entries]);
   appendLog(logPath, `[${startedAt}] started ${task} (${trigger})\n`);
-  if (typeof options?.openclawTargetTabIndex === "number") {
-    appendLog(logPath, `[${startedAt}] OPENCLAW_TARGET_TAB_INDEX=${options.openclawTargetTabIndex}\n`);
-  }
-  if (options?.openclawKeepScrollPosition) {
-    appendLog(logPath, `[${startedAt}] OPENCLAW_KEEP_SCROLL_POSITION=1\n`);
-  }
-  if (options?.openclawStartUrl) {
-    appendLog(logPath, `[${startedAt}] OPENCLAW_START_URL=${options.openclawStartUrl}\n`);
+  if (options?.xStatusUrl) {
+    appendLog(logPath, `[${startedAt}] X_STATUS_URL=${options.xStatusUrl}\n`);
   }
   if (typeof options?.topicBatchLimit === "number") {
     appendLog(logPath, `[${startedAt}] ANALYZE_TOPICS_DEFAULT_LIMIT=${options.topicBatchLimit}\n`);
@@ -390,11 +382,7 @@ export function triggerTask(
     stdio: ["ignore", "pipe", "pipe"],
     env: {
       ...process.env,
-      ...(typeof options?.openclawTargetTabIndex === "number"
-        ? { OPENCLAW_TARGET_TAB_INDEX: String(options.openclawTargetTabIndex) }
-        : {}),
-      ...(options?.openclawKeepScrollPosition ? { OPENCLAW_KEEP_SCROLL_POSITION: "1" } : {}),
-      ...(options?.openclawStartUrl ? { OPENCLAW_START_URL: options.openclawStartUrl } : {}),
+      ...(options?.xStatusUrl ? { OPENCLAW_START_URL: options.xStatusUrl } : {}),
       ...(typeof options?.topicBatchLimit === "number"
         ? { ANALYZE_TOPICS_DEFAULT_LIMIT: String(options.topicBatchLimit) }
         : {})
@@ -422,10 +410,10 @@ export function triggerTask(
   child.on("close", (code) => {
     const manifestRunId =
       task === "crawl_timeline" ||
-      task === "crawl_openclaw" ||
-      task === "capture_openclaw_current" ||
-      task === "capture_openclaw_current_tweet" ||
-      task === "capture_openclaw_current_tweet_and_compose_replies"
+      task === "crawl_x_api" ||
+      task === "capture_x_api_timeline" ||
+      task === "capture_x_api_tweet" ||
+      task === "capture_x_api_tweet_and_compose_replies"
         ? discoverLatestManifestRunId()
         : null;
     updateRunHistoryEntry(runControlId, (entry) => ({
@@ -478,7 +466,7 @@ export function evaluateSchedule(now = new Date()): {
     return { triggered: false, config: nextConfig, entry: null };
   }
 
-  const activeRun = findActiveRun(reconciledHistory.entries, "crawl_openclaw");
+  const activeRun = findActiveRun(reconciledHistory.entries, "crawl_x_api");
   if (activeRun) {
     const skippedConfig: SchedulerConfig = {
       ...nextConfig,
@@ -491,7 +479,7 @@ export function evaluateSchedule(now = new Date()): {
     return { triggered: false, config: skippedConfig, entry: null };
   }
 
-  const entry = triggerTask("crawl_openclaw", "scheduled");
+  const entry = triggerTask("crawl_x_api", "scheduled");
   const updatedConfig: SchedulerConfig = {
     ...nextConfig,
     lastTriggeredAt: entry.startedAt,

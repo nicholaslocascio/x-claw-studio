@@ -7,7 +7,7 @@ import { composeRepliesForAllGoals } from "@/src/server/reply-composer";
 import { createGeneratedDraft, markGeneratedDraftComplete, updateGeneratedDraft } from "@/src/server/generated-drafts";
 
 export async function generateAllReplyDraftsForTweet(
-  request: Pick<ReplyCompositionRequest, "tweetId" | "toneHint" | "angleHint" | "constraints">,
+  request: Pick<ReplyCompositionRequest, "tweetId" | "toneHint" | "angleHint" | "constraints" | "maxConcurrency">,
   options?: {
     onProgress?: (event: ReplyCompositionProgressEvent) => void;
   }
@@ -20,6 +20,7 @@ export async function generateAllReplyDraftsForTweet(
     tweetId: request.tweetId,
     goal: "insight",
     mode: "all_goals",
+    maxConcurrency: request.maxConcurrency,
     toneHint: request.toneHint,
     angleHint: request.angleHint,
     constraints: request.constraints

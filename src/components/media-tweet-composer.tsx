@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MediaPreview } from "@/src/components/media-preview";
+import { PostToXButton } from "@/src/components/post-to-x-button";
 import type { GeneratedDraftRecord } from "@/src/lib/generated-drafts";
 import { readNdjsonStream } from "@/src/lib/ndjson-stream";
 import type { MediaPostProgressEvent, MediaPostResult } from "@/src/lib/media-post-composer";
@@ -15,6 +16,21 @@ function formatDate(value: string | null | undefined): string {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+async function fetchMediaDraftHistory(usageId: string): Promise<GeneratedDraftRecord[]> {
+  const params = new URLSearchParams({
+    kind: "media_post",
+    usageId,
+    limit: "12"
+  });
+  const response = await fetch(`/api/generated-drafts?${params.toString()}`);
+  if (!response.ok) {
+    return [];
+  }
+
+  const body = await response.json();
+  return body.drafts ?? [];
 }
 
 export function MediaTweetComposer(props: {
@@ -48,22 +64,22 @@ export function MediaTweetComposer(props: {
   const latestProgress = progressEvents.at(-1) ?? null;
 
   async function loadDraftHistory(): Promise<void> {
-    const params = new URLSearchParams({
-      kind: "media_post",
-      usageId: props.usageId,
-      limit: "12"
-    });
-    const response = await fetch(`/api/generated-drafts?${params.toString()}`);
-    if (!response.ok) {
-      return;
-    }
-
-    const body = await response.json();
-    setDraftHistory(body.drafts ?? []);
+    setDraftHistory(await fetchMediaDraftHistory(props.usageId));
   }
 
   useEffect(() => {
-    void loadDraftHistory();
+    let cancelled = false;
+
+    void (async () => {
+      const drafts = await fetchMediaDraftHistory(props.usageId);
+      if (!cancelled) {
+        setDraftHistory(drafts);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [props.usageId]);
 
   async function compose(): Promise<void> {
@@ -313,6 +329,13 @@ export function MediaTweetComposer(props: {
                 <div className="tt-subpanel">
                   <p className="text-base leading-8 text-slate-100">{result.tweet.text}</p>
                 </div>
+                <PostToXButton
+                  mode="new_post"
+                  text={result.tweet.text}
+                  mediaFilePath={result.selectedMedia?.videoFilePath ?? result.selectedMedia?.localFilePath ?? props.videoFilePath}
+                  draftTitle={props.assetId ? `asset ${props.assetId}` : "media draft"}
+                  scratchpadText={result.tweet.postingNotes ?? result.tweet.whyThisTweetWorks}
+                />
                 <div className="flex flex-wrap gap-2">
                   {result.plan.supportingTopics.map((topic) => (
                     <span key={topic} className="tt-chip">
@@ -418,6 +441,23 @@ export function MediaTweetComposer(props: {
                       <div key={`${draft.draftId}-${index}`} className="mt-3 border border-white/10 bg-black/10 p-3">
                         <p className="text-sm leading-7 text-slate-100">{output.text}</p>
                         <p className="mt-2 text-sm leading-6 text-slate-300">{output.whyThisWorks}</p>
+                        <div className="mt-3">
+                          <PostToXButton
+                            mode="new_post"
+                            text={output.text}
+                            mediaFilePath={output.selectedMediaVideoFilePath ?? output.selectedMediaLocalFilePath ?? null}
+                            draftTitle={props.assetId ? `asset ${props.assetId}` : "media draft"}
+                            scratchpadText={output.postingNotes ?? output.whyThisWorks}
+                            draftId={draft.draftId}
+                            outputIndex={index}
+                            initialSavedAt={output.typefullySavedAt}
+                            initialPrivateUrl={output.typefullyPrivateUrl}
+                            initialShareUrl={output.typefullyShareUrl}
+                            initialDraftStatus={output.typefullyStatus}
+                            initialDraftId={output.typefullyDraftId}
+                            initialError={output.typefullyError}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>

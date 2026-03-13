@@ -7,7 +7,7 @@ import { extractTweetsFromHtml } from "@/src/lib/extract-tweets";
 import { createScrollHumanizer, type ScrollHumanizerDriver } from "@/src/lib/scroll-humanizer";
 import { queueMissingUsageAnalysis } from "@/src/server/auto-analysis";
 import { getDashboardData } from "@/src/server/data";
-import { buildMediaAssetIndex, buildMediaAssetSummaries } from "@/src/server/media-assets";
+import { collectMediaUsageIdsFromTweets, syncMediaAssetIndex, syncMediaAssetSummaries } from "@/src/server/media-assets";
 import type {
   CrawlManifest,
   ExtractedTweet,
@@ -318,13 +318,16 @@ async function run(): Promise<void> {
   manifest.completedAt = new Date().toISOString();
   writeJson(manifestPath, manifest);
   const data = getDashboardData();
-  const assetIndex = await buildMediaAssetIndex({
+  const newUsageIds = collectMediaUsageIdsFromTweets(manifest.capturedTweets);
+  const assetSync = await syncMediaAssetIndex({
     usages: data.tweetUsages,
-    manifests: data.manifests
+    manifests: data.manifests,
+    usageIds: newUsageIds
   });
-  buildMediaAssetSummaries({
+  syncMediaAssetSummaries({
     usages: data.tweetUsages,
-    assetIndex
+    assetIndex: assetSync.index,
+    assetIds: assetSync.touchedAssetIds
   });
   if (autoAnalyzeAfterCrawl) {
     console.log("Queueing detached missing-usage analysis after crawl...");

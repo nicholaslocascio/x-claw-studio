@@ -9,15 +9,30 @@ interface ControlPanelProps {
   runHistory: RunHistoryEntry[];
 }
 
-interface OpenClawTabOption {
-  targetId: string;
-  title?: string;
-  url?: string;
-}
-
-interface OpenClawHealthState {
-  ok: boolean;
+interface XAuthStatus {
+  configured: boolean;
+  appBaseUrl: string;
+  redirectUri: string;
+  missing: string[];
+  connected: boolean;
+  activeAccountId?: string | null;
   error: string | null;
+  auth: {
+    accountId: string;
+    label: string | null;
+    username: string | null;
+    userId: string | null;
+    expiresAt: string | null;
+    scope?: string | null;
+  } | null;
+  accounts?: Array<{
+    accountId: string;
+    label: string | null;
+    username: string | null;
+    userId: string | null;
+    expiresAt: string | null;
+    scope?: string | null;
+  }>;
 }
 
 const MANUAL_ACTIONS: Array<{
@@ -27,25 +42,25 @@ const MANUAL_ACTIONS: Array<{
   tone?: "primary" | "secondary";
 }> = [
   {
-    task: "crawl_openclaw",
+    task: "crawl_x_api",
     title: "Run Crawl",
-    description: "Refresh and scroll the selected OpenClaw tab to capture new timeline posts.",
+    description: "Use the X API home timeline endpoint to capture recent posts and media into the local corpus.",
     tone: "primary"
   },
   {
-    task: "capture_openclaw_current",
-    title: "Capture Current Page",
-    description: "Start from the attached page's current scroll position, then keep scrolling through what is already loaded."
+    task: "capture_x_api_timeline",
+    title: "Capture Timeline Window",
+    description: "Run another bounded X API timeline pull without needing a browser-attached tab."
   },
   {
-    task: "capture_openclaw_current_tweet",
-    title: "Capture Tweet + 10 Replies",
-    description: "Jump to the top of the current tweet page, grab the main tweet plus roughly the first 10 replies, then stop."
+    task: "capture_x_api_tweet",
+    title: "Capture Tweet By URL",
+    description: "Look up one post by status URL through the X API and persist its media assets."
   },
   {
-    task: "capture_openclaw_current_tweet_and_compose_replies",
+    task: "capture_x_api_tweet_and_compose_replies",
     title: "Capture + Draft All Replies",
-    description: "Run the focused tweet capture, then generate reply drafts for every reply goal and save them to draft history."
+    description: "Look up one post by URL through the X API, then generate reply drafts for every reply goal."
   },
   {
     task: "analyze_missing",
@@ -96,113 +111,72 @@ export function ControlPanel({ schedulerConfig, runHistory }: ControlPanelProps)
   const [timesValue, setTimesValue] = useState(
     (schedulerConfig.times?.length ? schedulerConfig.times : [toTimeInput(schedulerConfig.hour, schedulerConfig.minute)]).join(", ")
   );
-  const [openclawTabIndex, setOpenclawTabIndex] = useState("0");
-  const [openclawTabs, setOpenclawTabs] = useState<OpenClawTabOption[]>([]);
-  const [openclawHealth, setOpenclawHealth] = useState<OpenClawHealthState | null>(null);
-  const [openclawKeepScrollPosition, setOpenclawKeepScrollPosition] = useState(false);
-  const [openclawStartUrl, setOpenclawStartUrl] = useState("");
+  const [xStatusUrl, setXStatusUrl] = useState("");
   const [timezone, setTimezone] = useState(schedulerConfig.timezone);
   const [topicBatchLimit, setTopicBatchLimit] = useState("100");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedLog, setSelectedLog] = useState<RunHistoryEntry | null>(null);
   const [logContent, setLogContent] = useState("");
+  const [xAuthStatus, setXAuthStatus] = useState<XAuthStatus | null>(null);
+  const [xConnectUsername, setXConnectUsername] = useState("");
+  const [xConnectUserId, setXConnectUserId] = useState("");
+  const [xConnectLabel, setXConnectLabel] = useState("");
+  const [xSelectedAccountId, setXSelectedAccountId] = useState("");
 
   const recentFailures = useMemo(() => runHistory.filter((entry) => entry.status === "failed"), [runHistory]);
 
-  async function fetchOpenClawTabs(): Promise<{ tabs: OpenClawTabOption[]; error: string | null }> {
-    const response = await fetch("/api/control/openclaw-tabs");
-    const data = (await response.json().catch(() => null)) as
-      | { tabs?: OpenClawTabOption[]; error?: string }
-      | null;
-
-    if (!response.ok) {
-      return { tabs: [], error: data?.error || "Failed to load OpenClaw tabs" };
-    }
-
-    return { tabs: data?.tabs ?? [], error: null };
-  }
-
-  async function loadOpenClawTabs(): Promise<void> {
+  async function loadXAuthStatus(): Promise<void> {
     try {
-      const result = await fetchOpenClawTabs();
-      if (result.error) {
-        setStatusMessage(result.error);
+      const response = await fetch("/api/x/oauth/status");
+      const data = (await response.json().catch(() => null)) as XAuthStatus | null;
+      if (!data) {
+        setStatusMessage("Failed to load X auth status");
         return;
       }
 
-      setOpenclawTabs(result.tabs);
+      setXAuthStatus(data);
+      setXSelectedAccountId(data.activeAccountId ?? data.auth?.accountId ?? data.accounts?.[0]?.accountId ?? "");
+      if (data.error) {
+        setStatusMessage(data.error);
+      }
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to load OpenClaw tabs");
-    }
-  }
-
-  async function loadOpenClawHealth(tabIndexValue = openclawTabIndex): Promise<void> {
-    try {
-      const parsedTabIndex = Number(tabIndexValue);
-      const tabIndex = Number.isInteger(parsedTabIndex) && parsedTabIndex >= 0 ? parsedTabIndex : 0;
-      const response = await fetch(`/api/control/openclaw-health?tabIndex=${tabIndex}`);
-      const data = (await response.json().catch(() => null)) as
-        | { ok?: boolean; error?: string | null }
-        | null;
-
-      setOpenclawHealth({
-        ok: response.ok && data?.ok === true,
-        error: data?.error ?? null
-      });
-    } catch (error) {
-      setOpenclawHealth({
-        ok: false,
-        error: error instanceof Error ? error.message : "Failed to check OpenClaw health"
-      });
+      setStatusMessage(error instanceof Error ? error.message : "Failed to load X auth status");
     }
   }
 
   useEffect(() => {
     let cancelled = false;
 
-    fetchOpenClawTabs()
-      .then((result) => {
-        if (cancelled) {
+    fetch("/api/x/oauth/status")
+      .then((response) => response.json().catch(() => null))
+      .then((data) => {
+        if (cancelled || !data) {
           return;
         }
 
-        if (result.error) {
-          setStatusMessage(result.error);
-          return;
+        setXAuthStatus(data as XAuthStatus);
+        if ((data as XAuthStatus).error) {
+          setStatusMessage((data as XAuthStatus).error);
         }
-
-        setOpenclawTabs(result.tabs);
-        const initialTabIndex = "0";
-        void (async () => {
-          try {
-            const parsedTabIndex = Number(initialTabIndex);
-            const tabIndex = Number.isInteger(parsedTabIndex) && parsedTabIndex >= 0 ? parsedTabIndex : 0;
-            const response = await fetch(`/api/control/openclaw-health?tabIndex=${tabIndex}`);
-            const data = (await response.json().catch(() => null)) as
-              | { ok?: boolean; error?: string | null }
-              | null;
-
-            if (!cancelled) {
-              setOpenclawHealth({
-                ok: response.ok && data?.ok === true,
-                error: data?.error ?? null
-              });
-            }
-          } catch (error) {
-            if (!cancelled) {
-              setOpenclawHealth({
-                ok: false,
-                error: error instanceof Error ? error.message : "Failed to check OpenClaw health"
-              });
-            }
-          }
-        })();
       })
       .catch((error) => {
         if (!cancelled) {
-          setStatusMessage(error instanceof Error ? error.message : "Failed to load OpenClaw tabs");
+          setStatusMessage(error instanceof Error ? error.message : "Failed to load X auth status");
         }
       });
+
+    const params = new URLSearchParams(window.location.search);
+    const xAuth = params.get("x_auth");
+    const message = params.get("message");
+    if (xAuth === "connected") {
+      window.setTimeout(() => {
+        setStatusMessage("X connected.");
+      }, 0);
+    } else if (xAuth === "error") {
+      window.setTimeout(() => {
+        setStatusMessage(message || "X connection failed.");
+      }, 0);
+    }
 
     return () => {
       cancelled = true;
@@ -236,14 +210,6 @@ export function ControlPanel({ schedulerConfig, runHistory }: ControlPanelProps)
 
   async function triggerRun(task: RunTask): Promise<void> {
     try {
-      const parsedTabIndex = Number(openclawTabIndex);
-      const openclawTargetTabIndex =
-        Number.isInteger(parsedTabIndex) && parsedTabIndex >= 0 ? parsedTabIndex : 0;
-      const useOpenClawOptions =
-        task === "crawl_openclaw" ||
-        task === "capture_openclaw_current" ||
-        task === "capture_openclaw_current_tweet" ||
-        task === "capture_openclaw_current_tweet_and_compose_replies";
       const parsedTopicBatchLimit = Number(topicBatchLimit);
       const normalizedTopicBatchLimit =
         Number.isInteger(parsedTopicBatchLimit) && parsedTopicBatchLimit > 0 ? parsedTopicBatchLimit : 100;
@@ -252,9 +218,7 @@ export function ControlPanel({ schedulerConfig, runHistory }: ControlPanelProps)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           task,
-          openclawTargetTabIndex,
-          openclawKeepScrollPosition: useOpenClawOptions ? openclawKeepScrollPosition : false,
-          openclawStartUrl: useOpenClawOptions && openclawStartUrl.trim() ? openclawStartUrl.trim() : null,
+          xStatusUrl: xStatusUrl.trim() ? xStatusUrl.trim() : null,
           topicBatchLimit: task === "analyze_topics" ? normalizedTopicBatchLimit : null
         })
       });
@@ -298,6 +262,81 @@ export function ControlPanel({ schedulerConfig, runHistory }: ControlPanelProps)
     }
   }
 
+  async function disconnectX(): Promise<void> {
+    try {
+      const response = await fetch("/api/x/oauth/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: xSelectedAccountId || null
+        })
+      });
+      if (!response.ok) {
+        setStatusMessage("Failed to disconnect X");
+        return;
+      }
+
+      setStatusMessage("X disconnected.");
+      await loadXAuthStatus();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to disconnect X");
+    }
+  }
+
+  async function saveXAccountMetadata(): Promise<void> {
+    if (!xSelectedAccountId) {
+      setStatusMessage("Choose an X account first.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/x/oauth/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: xSelectedAccountId,
+          username: xConnectUsername.trim() || null,
+          userId: xConnectUserId.trim() || null,
+          label: xConnectLabel.trim() || null,
+          makeActive: true
+        })
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        setStatusMessage(data?.error || "Failed to save X account metadata");
+        return;
+      }
+
+      setStatusMessage("X account metadata saved.");
+      await loadXAuthStatus();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to save X account metadata");
+    }
+  }
+
+  async function setActiveXAccountSelection(accountId: string): Promise<void> {
+    setXSelectedAccountId(accountId);
+    const selectedAccount = xAuthStatus?.accounts?.find((account) => account.accountId === accountId) ?? null;
+    setXConnectUsername(selectedAccount?.username ?? "");
+    setXConnectUserId(selectedAccount?.userId ?? "");
+    setXConnectLabel(selectedAccount?.label ?? "");
+
+    try {
+      const response = await fetch("/api/x/oauth/account", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId })
+      });
+      if (!response.ok) {
+        setStatusMessage("Failed to switch active X account");
+        return;
+      }
+      await loadXAuthStatus();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to switch active X account");
+    }
+  }
+
   return (
     <section id="run-control" className="relative z-10 mb-8 terminal-panel">
       <div className="panel-body">
@@ -306,7 +345,7 @@ export function ControlPanel({ schedulerConfig, runHistory }: ControlPanelProps)
             <div className="section-kicker">Run Control</div>
             <h2 className="section-title mt-3">Keep capture operations and scheduler state in one place</h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-              Pick a tab, launch the task you need, then inspect history and failures without leaving the page.
+              Launch API-backed capture or maintenance work here, then inspect history and failures without leaving the page.
             </p>
           </div>
           <div className={`tt-chip ${enabled ? "tt-chip-accent" : ""}`}>
@@ -327,87 +366,128 @@ export function ControlPanel({ schedulerConfig, runHistory }: ControlPanelProps)
               </div>
             </div>
             <div className="panel-body space-y-4">
+              <div className="tt-subpanel">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="tt-copy">
+                      X auth:{" "}
+                      {xAuthStatus == null
+                        ? "checking"
+                        : xAuthStatus.connected
+                          ? `connected${xAuthStatus.auth?.label ? ` as ${xAuthStatus.auth.label}` : xAuthStatus.auth?.username ? ` as @${xAuthStatus.auth.username}` : ""}`
+                          : xAuthStatus.configured
+                            ? "not connected"
+                            : `missing ${xAuthStatus.missing.join(", ")}`}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      Connect each account once, save its username and numeric user id, then switch the active account before a crawl.
+                    </p>
+                    {xAuthStatus?.auth?.expiresAt ? (
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+                        expires {formatDate(xAuthStatus.auth.expiresAt)}
+                      </p>
+                    ) : null}
+                    {xAuthStatus?.redirectUri ? (
+                      <p className="mt-2 text-xs leading-6 text-slate-400">callback {xAuthStatus.redirectUri}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      className="tt-button"
+                      onClick={() => {
+                        const params = new URLSearchParams();
+                        if (xConnectUsername.trim()) params.set("username", xConnectUsername.trim().replace(/^@/, ""));
+                        if (xConnectUserId.trim()) params.set("userId", xConnectUserId.trim());
+                        if (xConnectLabel.trim()) params.set("label", xConnectLabel.trim());
+                        window.location.href = `/api/x/oauth/start${params.toString() ? `?${params.toString()}` : ""}`;
+                      }}
+                      disabled={isPending || xAuthStatus?.configured === false}
+                    >
+                      <span>{xAuthStatus?.connected ? "Connect Another X" : "Connect X"}</span>
+                    </button>
+                    {xAuthStatus?.connected ? (
+                      <button
+                        className="tt-button tt-button-secondary"
+                        onClick={() => startTransition(() => void disconnectX())}
+                        disabled={isPending}
+                      >
+                        <span>Disconnect Selected</span>
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
               <label className="tt-field">
-                <span className="tt-field-label">OpenClaw Tab Picker</span>
+                <span className="tt-field-label">Saved X Accounts</span>
                 <select
-                  value={openclawTabIndex}
+                  value={xSelectedAccountId}
                   onChange={(event) => {
-                    const value = event.target.value;
-                    setOpenclawTabIndex(value);
-                    void loadOpenClawHealth(value);
+                    void setActiveXAccountSelection(event.target.value);
                   }}
                   className="tt-select"
                 >
-                  {openclawTabs.length === 0 ? (
-                    <option value={openclawTabIndex}>No tabs loaded</option>
+                  {(xAuthStatus?.accounts?.length ?? 0) === 0 ? (
+                    <option value="">No connected accounts</option>
                   ) : (
-                    openclawTabs.map((tab, index) => (
-                      <option key={tab.targetId} value={String(index)}>
-                        [{index}] {tab.title ?? "untitled"} {tab.url ? `- ${tab.url}` : ""}
+                    (xAuthStatus?.accounts ?? []).map((account) => (
+                      <option key={account.accountId} value={account.accountId}>
+                        {account.label ?? account.username ?? account.userId ?? account.accountId}
                       </option>
                     ))
                   )}
                 </select>
               </label>
 
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="tt-field">
+                  <span className="tt-field-label">Username</span>
+                  <input
+                    type="text"
+                    value={xConnectUsername}
+                    onChange={(event) => setXConnectUsername(event.target.value)}
+                    placeholder="Nick_Locascio_"
+                    className="tt-input"
+                  />
+                </label>
+                <label className="tt-field">
+                  <span className="tt-field-label">User ID</span>
+                  <input
+                    type="text"
+                    value={xConnectUserId}
+                    onChange={(event) => setXConnectUserId(event.target.value)}
+                    placeholder="29588111"
+                    className="tt-input"
+                  />
+                </label>
+                <label className="tt-field">
+                  <span className="tt-field-label">Label</span>
+                  <input
+                    type="text"
+                    value={xConnectLabel}
+                    onChange={(event) => setXConnectLabel(event.target.value)}
+                    placeholder="@Nick_Locascio_"
+                    className="tt-input"
+                  />
+                </label>
+              </div>
+
               <div className="flex flex-wrap gap-3">
                 <button
                   className="tt-button tt-button-secondary"
-                  onClick={() =>
-                    startTransition(async () => {
-                      await loadOpenClawTabs();
-                      await loadOpenClawHealth(openclawTabIndex);
-                    })
-                  }
-                  disabled={isPending}
+                  onClick={() => startTransition(() => void saveXAccountMetadata())}
+                  disabled={isPending || !xSelectedAccountId}
                 >
-                  <span>Refresh Tabs</span>
+                  <span>Save Account Metadata</span>
                 </button>
               </div>
 
               <label className="tt-field">
-                <span className="tt-field-label">OpenClaw Tab Index (0-based)</span>
+                <span className="tt-field-label">Tweet URL For Lookup (optional)</span>
                 <input
                   type="text"
-                  value={openclawTabIndex}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setOpenclawTabIndex(value);
-                    void loadOpenClawHealth(value);
-                  }}
-                  placeholder="0"
-                  className="tt-input"
-                />
-              </label>
-
-              <div className={`tt-subpanel ${openclawHealth?.ok ? "tt-chip-accent" : ""}`}>
-                <p className="tt-copy">
-                  OpenClaw health: {openclawHealth == null ? "checking" : openclawHealth.ok ? "ready" : "broken"}
-                </p>
-                {openclawHealth?.error ? <p className="mt-2 text-sm leading-6 text-rose-300">{openclawHealth.error}</p> : null}
-              </div>
-
-              <label className="tt-field">
-                <span className="tt-field-label">OpenClaw Start Position</span>
-                <div className="tt-subpanel-soft flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={openclawKeepScrollPosition}
-                    onChange={(event) => setOpenclawKeepScrollPosition(event.target.checked)}
-                    className="tt-checkbox"
-                  />
-                  <span className="font-[family:var(--font-label)] text-xs uppercase tracking-[0.22em] text-slate-200">
-                    Keep current scroll position for manual OpenClaw runs
-                  </span>
-                </div>
-              </label>
-
-              <label className="tt-field">
-                <span className="tt-field-label">OpenClaw Tweet URL (optional)</span>
-                <input
-                  type="text"
-                  value={openclawStartUrl}
-                  onChange={(event) => setOpenclawStartUrl(event.target.value)}
+                  value={xStatusUrl}
+                  onChange={(event) => setXStatusUrl(event.target.value)}
                   placeholder="https://x.com/user/status/1234567890"
                   className="tt-input"
                 />
@@ -462,7 +542,7 @@ export function ControlPanel({ schedulerConfig, runHistory }: ControlPanelProps)
 
               <div className="tt-subpanel">
                 <p className="tt-copy">
-                OpenClaw actions use the exact 0-based array index from `openclaw browser --browser-profile chrome tabs --json`. `Run Crawl` refreshes and scrolls that tab by default. `Capture Current Page` stays on the current page and starts from the tab&apos;s current scroll position. `Capture Tweet + 10 Replies` resets to the top of the tweet page and stops once it has the main tweet plus the early reply window. `Capture + Draft All Replies` runs that tighter capture and then saves one draft for each reply goal. `Keep current scroll position` only affects manual `Run Crawl` runs. If you provide a tweet status URL, the manual OpenClaw run navigates there first and auto-stars only that top tweet&apos;s media after capture.
+                  Capture now uses the official X API. `Run Crawl` and `Capture Timeline Window` pull the authenticated home timeline, while the tweet-specific actions use the status URL above to look up one post and persist its assets.
                 </p>
               </div>
             </div>

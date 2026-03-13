@@ -1,10 +1,24 @@
 import "@/src/lib/env";
-import { runOpenClawCurrentCapture } from "@/src/server/openclaw-current-capture";
+import { runXApiCapture } from "@/src/server/x-api-capture";
 import { generateAllReplyDraftsForTweet } from "@/src/server/reply-composer-job";
 
+function readMaxConcurrency(): number | undefined {
+  const rawValue = process.env.REPLY_COMPOSER_MAX_CONCURRENCY;
+  if (!rawValue) {
+    return undefined;
+  }
+
+  const parsedValue = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsedValue) || parsedValue < 1) {
+    throw new Error("REPLY_COMPOSER_MAX_CONCURRENCY must be a positive integer when set.");
+  }
+
+  return parsedValue;
+}
+
 async function run(): Promise<void> {
-  const captureResult = await runOpenClawCurrentCapture({
-    mode: "tweet_thread"
+  const captureResult = await runXApiCapture({
+    mode: "tweet_lookup"
   });
 
   const tweetId = captureResult.topTweet?.tweetId;
@@ -16,6 +30,7 @@ async function run(): Promise<void> {
   const result = await generateAllReplyDraftsForTweet(
     {
       tweetId,
+      maxConcurrency: readMaxConcurrency(),
       toneHint: "sharp but grounded",
       constraints: "keep it tight and postable"
     },
@@ -29,6 +44,8 @@ async function run(): Promise<void> {
             `message=${event.message}`,
             event.detail ? `detail=${event.detail}` : null,
             typeof event.completedGoals === "number" ? `completed=${event.completedGoals}` : null,
+            typeof event.runningGoals === "number" ? `running=${event.runningGoals}` : null,
+            typeof event.queuedGoals === "number" ? `queued=${event.queuedGoals}` : null,
             typeof event.totalGoals === "number" ? `total=${event.totalGoals}` : null
           ]
             .filter(Boolean)

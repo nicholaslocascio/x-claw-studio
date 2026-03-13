@@ -1,9 +1,9 @@
 import "@/src/lib/env";
-import { runOpenClawCurrentCapture } from "@/src/server/openclaw-current-capture";
+import { runXApiCapture } from "@/src/server/x-api-capture";
 
 async function run(): Promise<void> {
-  await runOpenClawCurrentCapture({
-    mode: "tweet_thread"
+  await runXApiCapture({
+    mode: "tweet_lookup"
   });
 }
 

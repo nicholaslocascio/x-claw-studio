@@ -29,7 +29,7 @@ This repo is not database-backed in the current runtime path. The app reads from
 - UI entrypoints: [`app/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/page.tsx), [`app/matches/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/matches/page.tsx), [`app/usage/[usageId]/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/usage/[usageId]/page.tsx)
 - UI components: [`src/components`](/Users/nicklocascio/Projects/twitter-trend/src/components)
 - File-backed read model: [`src/server/data.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts)
-- Capture entrypoints: [`src/cli/crawl-openclaw.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-openclaw.ts), [`src/cli/crawl-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-timeline.ts), [`src/cli/capture-openclaw-current.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/capture-openclaw-current.ts)
+- Capture entrypoints: [`src/cli/crawl-x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-x-api.ts), [`src/cli/crawl-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-timeline.ts), [`src/cli/capture-x-api-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/capture-x-api-timeline.ts)
 - Capture internals: [`src/server/openclaw-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/openclaw-capture.ts), [`src/server/openclaw-browser.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/openclaw-browser.ts), [`src/lib/extract-tweets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/extract-tweets.ts)
 - Analysis pipeline: [`src/server/analysis-pipeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-pipeline.ts), [`src/server/gemini-analysis.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/gemini-analysis.ts), [`src/server/analysis-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-store.ts)
 - Asset rebuild and grouping: [`src/server/media-assets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-assets.ts), [`src/server/media-fingerprint.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-fingerprint.ts), [`src/server/media-embedding.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-embedding.ts)
@@ -103,7 +103,7 @@ npm run lint
 npm test
 npm run test:integration
 npm run test:e2e
-npm run crawl:openclaw
+npm run crawl:x-api
 npm run crawl:timeline
 npm run analyze:missing
 npm run media:rebuild

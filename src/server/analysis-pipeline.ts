@@ -2,7 +2,7 @@ import { buildUsageId } from "@/src/lib/usage-id";
 import { analyzeTweetMediaUsage, analyzeTweetMediaUsageWithOptions } from "@/src/server/gemini-analysis";
 import { writeUsageAnalysis } from "@/src/server/analysis-store";
 import { indexUsageAnalysisInChroma } from "@/src/server/chroma-facets";
-import { buildMediaAssetSummaries, readMediaAssetIndex } from "@/src/server/media-assets";
+import { readMediaAssetIndex, syncMediaAssetSummaries } from "@/src/server/media-assets";
 import { getDashboardData } from "@/src/server/data";
 import { analyzeMediaAssetVideo, assertVideoWithinAnalysisLimit } from "@/src/server/media-asset-video";
 import { findTweetUsage } from "@/src/server/tweet-repository";
@@ -41,9 +41,10 @@ export async function analyzeAndIndexTweetUsage(tweetId: string, mediaIndex = 0)
   const refreshedAssetIndex = readMediaAssetIndex();
 
   if (refreshedAssetIndex) {
-    buildMediaAssetSummaries({
+    syncMediaAssetSummaries({
       usages: dashboardData.tweetUsages,
-      assetIndex: refreshedAssetIndex
+      assetIndex: refreshedAssetIndex,
+      assetIds: assetId ? [assetId] : []
     });
   }
 

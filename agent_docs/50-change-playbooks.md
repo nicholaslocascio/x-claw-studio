@@ -11,9 +11,9 @@ Use this when you know what kind of change you need to make but not where to sta
 
 ## Change Crawl Behavior
 
-1. Pick the trigger path: OpenClaw or Playwright CLI.
+1. Pick the trigger path: X API or Playwright CLI.
 2. Update capture/orchestration in the matching CLI file.
-3. Update browser interaction or persistence helpers in [`src/server/openclaw-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/openclaw-capture.ts) or [`src/lib/extract-tweets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/extract-tweets.ts).
+3. Update X API persistence in [`src/server/x-api-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts) or Playwright extraction in [`src/lib/extract-tweets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/extract-tweets.ts).
 4. Verify the resulting `manifest.json` shape still matches [`src/lib/types.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts).
 
 ## Change Analysis Fields
@@ -72,6 +72,32 @@ Use this when you know what kind of change you need to make but not where to sta
 3. Keep model-specific behavior behind [`src/server/media-post-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-post-composer-model.ts).
 4. If you change the subject context, verify [`src/server/usage-details.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/usage-details.ts) so the composer still sees the right asset, topic, and prior-usage information.
 5. Verify the UI in [`src/components/media-tweet-composer.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/media-tweet-composer.tsx), including streamed progress and fixed-asset rendering.
+
+## Change Draft Saving To Typefully
+
+1. Start in [`src/server/typefully.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/typefully.ts) for media upload, polling, and draft creation.
+2. Keep request and response contract changes in [`src/lib/typefully.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/typefully.ts).
+3. If saved draft state should survive refresh, update [`src/server/generated-drafts.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/generated-drafts.ts) and the draft record contract in [`src/lib/generated-drafts.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/generated-drafts.ts).
+4. Verify every Typefully save surface that uses [`src/components/post-to-x-button.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/post-to-x-button.tsx): reply results, topic results, media results, recent draft history, and `/drafts`.
+5. Run the Typefully-related tests and at least one live save against a non-critical Typefully social set before calling the flow done.
+
+## Make Gemini Composition Faster
+
+Use this when the compose flows feel slower than expected.
+
+1. Start in the model adapters:
+   [`src/server/reply-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer-model.ts)
+   [`src/server/topic-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/topic-composer-model.ts)
+   [`src/server/media-post-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-post-composer-model.ts)
+2. Count Gemini CLI calls before changing prompt wording. The current pattern is usually `plan -> compose -> cleanup`, which means three separate CLI invocations for one draft.
+3. Treat `all_goals` as a latency multiplier, not a free compare mode. Five reply goals still means fifteen Gemini CLI calls before retrieval overhead; the batch helper now overlaps them up to `maxConcurrency`, but that only hides latency if the local machine and Gemini CLI can absorb the parallelism.
+4. Shrink prompt size before chasing transport issues. Repeated instruction blocks, long candidate dumps, and duplicated style rules add real latency.
+5. Only keep the cleanup pass when the first draft needs it. If quality checks can reject only the bad cases, the fast path should skip cleanup.
+6. Keep validation runs narrow. For quick prompt iteration, run one goal with no media search first, then add retrieval once wording looks right.
+7. Distinguish Gemini time from local stack time. The `gemini` CLI itself adds router plus main-model overhead even on simple prompts, while full compose runs also pay for local search, data loading, and any Chroma startup noise.
+8. If a run looks hung, test the CLI directly with a tiny JSON prompt before blaming the prompt text. That tells you whether the slowdown is in Gemini or in repo-side orchestration.
+9. If retrieval is the bottleneck, inspect [`src/server/reply-media-search.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-media-search.ts) and any Chroma-backed paths before editing the composition prompts.
+10. After speed changes, verify both quality and latency. A faster draft that falls back into analyst voice is a regression.
 
 ## Safe Editing Sequence
 

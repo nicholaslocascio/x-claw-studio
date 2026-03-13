@@ -182,6 +182,21 @@ export interface CapturedTweetRecord {
   topTopicHotnessScore: number;
 }
 
+export type CapturedTweetFilter = "with_media" | "without_media" | "all";
+
+export interface CapturedTweetPage {
+  tweets: CapturedTweetRecord[];
+  page: number;
+  pageSize: number;
+  totalResults: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+  query: string;
+  tweetFilter: CapturedTweetFilter;
+  counts: Record<CapturedTweetFilter, number>;
+}
+
 export type TopicSignalKind = "entity" | "cashtag" | "hashtag" | "phrase" | "reference" | "brand" | "intent";
 export type TopicSentiment = "positive" | "negative" | "mixed" | "neutral";
 export type TopicStance =
@@ -315,10 +330,10 @@ export interface MediaAssetView {
 
 export type RunTask =
   | "crawl_timeline"
-  | "crawl_openclaw"
-  | "capture_openclaw_current"
-  | "capture_openclaw_current_tweet"
-  | "capture_openclaw_current_tweet_and_compose_replies"
+  | "crawl_x_api"
+  | "capture_x_api_timeline"
+  | "capture_x_api_tweet"
+  | "capture_x_api_tweet_and_compose_replies"
   | "analyze_missing"
   | "analyze_topics"
   | "rebuild_media_assets"

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { listGeneratedDrafts } from "@/src/server/generated-drafts";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const kindRaw = searchParams.get("kind");
@@ -11,13 +13,20 @@ export async function GET(request: Request) {
   const limitRaw = Number(searchParams.get("limit") ?? 20);
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, limitRaw)) : 20;
 
-  return NextResponse.json({
-    drafts: listGeneratedDrafts({
-      kind,
-      usageId,
-      tweetId,
-      topicId,
-      limit
-    })
-  });
+  return NextResponse.json(
+    {
+      drafts: listGeneratedDrafts({
+        kind,
+        usageId,
+        tweetId,
+        topicId,
+        limit
+      })
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store"
+      }
+    }
+  );
 }
