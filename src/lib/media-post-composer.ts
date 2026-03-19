@@ -3,32 +3,32 @@ import type { ReplyMediaCandidate } from "@/src/lib/reply-composer";
 
 export const mediaPostRequestSchema = z.object({
   usageId: z.string().min(1),
-  toneHint: z.string().trim().max(120).optional(),
-  angleHint: z.string().trim().max(280).optional(),
-  constraints: z.string().trim().max(280).optional()
+  toneHint: z.string().trim().optional(),
+  angleHint: z.string().trim().optional(),
+  constraints: z.string().trim().optional()
 });
 
 export type MediaPostRequest = z.infer<typeof mediaPostRequestSchema>;
 
 export const mediaPostPlanSchema = z.object({
-  angle: z.string().min(1).max(240),
-  tone: z.string().min(1).max(120),
-  postIntent: z.string().min(1).max(240),
-  targetReaction: z.string().min(1).max(240),
-  searchQueries: z.array(z.string().min(1).max(160)).min(2).max(4),
-  candidateSelectionCriteria: z.array(z.string().min(1).max(160)).min(2).max(6),
-  supportingTopics: z.array(z.string().min(1).max(120)).max(4),
-  avoid: z.array(z.string().min(1).max(160)).max(6)
+  angle: z.string().min(1),
+  tone: z.string().min(1),
+  postIntent: z.string().min(1),
+  targetReaction: z.string().min(1),
+  searchQueries: z.array(z.string().min(1)).min(2),
+  candidateSelectionCriteria: z.array(z.string().min(1)).min(2),
+  supportingTopics: z.array(z.string().min(1)),
+  avoid: z.array(z.string().min(1))
 });
 
 export type MediaPostPlan = z.infer<typeof mediaPostPlanSchema>;
 
 export const mediaPostDraftSchema = z.object({
-  tweetText: z.string().min(1).max(280),
+  tweetText: z.string().min(1),
   selectedCandidateId: z.string().min(1).nullable(),
-  mediaSelectionReason: z.string().min(1).max(400),
-  whyThisTweetWorks: z.string().min(1).max(400),
-  postingNotes: z.string().min(1).max(400).nullable()
+  mediaSelectionReason: z.string().min(1),
+  whyThisTweetWorks: z.string().min(1),
+  postingNotes: z.string().min(1).nullable()
 });
 
 export type MediaPostDraft = z.infer<typeof mediaPostDraftSchema>;

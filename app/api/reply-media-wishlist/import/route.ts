@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { MemeTemplateImportProgressEvent } from "@/src/lib/meme-template";
+import { logRouteError } from "@/src/server/api-error";
+import { createNdjsonStreamController } from "@/src/server/ndjson-response";
 import { importWishlistMemeFromMemingWorld } from "@/src/server/meme-template-import";
 
 const requestSchema = z.object({
@@ -13,18 +15,16 @@ export async function POST(request: Request) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
-        function write(event: unknown): void {
-          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
-        }
+        const streamController = createNdjsonStreamController(controller, encoder);
 
         try {
           const result = await importWishlistMemeFromMemingWorld(body.key, {
             onProgress(event: MemeTemplateImportProgressEvent) {
-              write({ type: "progress", ...event });
+              streamController.write({ type: "progress", ...event });
             }
           });
 
-          write({
+          streamController.write({
             type: "result",
             result: {
               key: result.key,
@@ -32,13 +32,14 @@ export async function POST(request: Request) {
               pageUrl: result.pageUrl
             }
           });
-          controller.close();
+          streamController.close();
         } catch (error) {
-          write({
+          const message = logRouteError("reply-media-wishlist/import.stream", request, error, "Unknown meme import error");
+          streamController.write({
             type: "error",
-            error: error instanceof Error ? error.message : "Unknown meme import error"
+            error: message
           });
-          controller.close();
+          streamController.close();
         }
       }
     });
@@ -50,8 +51,9 @@ export async function POST(request: Request) {
       }
     });
   } catch (error) {
+    const message = logRouteError("reply-media-wishlist/import", request, error, "Unknown meme import error");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown meme import error" },
+      { error: message },
       { status: 500 }
     );
   }

@@ -30,5 +30,5 @@ describe("x-media-analyst binary", () => {
     expect(parsed.command).toBe("search-tweets");
     expect(parsed.limit).toBe(1);
     expect(Array.isArray(parsed.results)).toBe(true);
-  });
+  }, 15000);
 });

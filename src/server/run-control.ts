@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { ensureDir, writeJson } from "@/src/lib/fs";
 import type { RunHistoryEntry, RunTask, SchedulerConfig } from "@/src/lib/types";
+import { readPriorityAccountsConfig } from "@/src/server/priority-accounts";
 
 const projectRoot = process.cwd();
 const controlDir = path.join(projectRoot, "data", "control");
@@ -30,6 +31,7 @@ const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
 const TASK_TO_COMMAND: Record<RunTask, { command: string; args: string[] }> = {
   crawl_timeline: { command: "npm", args: ["run", "crawl:timeline"] },
   crawl_x_api: { command: "npm", args: ["run", "crawl:x-api"] },
+  capture_priority_accounts: { command: "npm", args: ["run", "capture:priority-accounts"] },
   capture_x_api_timeline: { command: "npm", args: ["run", "capture:x-api-timeline"] },
   capture_x_api_tweet: { command: "npm", args: ["run", "capture:x-api-tweet"] },
   capture_x_api_tweet_and_compose_replies: {
@@ -339,12 +341,13 @@ function findActiveRun(entries: RunHistoryEntry[], task: RunTask): RunHistoryEnt
   return entries.find((entry) => entry.task === task && entry.status === "running") ?? null;
 }
 
-export function triggerTask(
+function startDetachedTask(
   task: RunTask,
-  trigger: "manual" | "scheduled",
+  trigger: RunHistoryEntry["trigger"],
   options?: {
     xStatusUrl?: string | null;
     topicBatchLimit?: number | null;
+    sourceLabel?: string | null;
   }
 ): RunHistoryEntry {
   ensureDir(logsDir);
@@ -368,6 +371,9 @@ export function triggerTask(
   const entries = readRunHistory();
   writeRunHistory([historyEntry, ...entries]);
   appendLog(logPath, `[${startedAt}] started ${task} (${trigger})\n`);
+  if (options?.sourceLabel) {
+    appendLog(logPath, `[${startedAt}] queued by ${options.sourceLabel}\n`);
+  }
   if (options?.xStatusUrl) {
     appendLog(logPath, `[${startedAt}] X_STATUS_URL=${options.xStatusUrl}\n`);
   }
@@ -411,6 +417,7 @@ export function triggerTask(
     const manifestRunId =
       task === "crawl_timeline" ||
       task === "crawl_x_api" ||
+      task === "capture_priority_accounts" ||
       task === "capture_x_api_timeline" ||
       task === "capture_x_api_tweet" ||
       task === "capture_x_api_tweet_and_compose_replies"
@@ -429,6 +436,31 @@ export function triggerTask(
 
   child.unref();
   return historyEntry;
+}
+
+export function triggerTask(
+  task: RunTask,
+  trigger: "manual" | "scheduled",
+  options?: {
+    xStatusUrl?: string | null;
+    topicBatchLimit?: number | null;
+  }
+): RunHistoryEntry {
+  return startDetachedTask(task, trigger, options);
+}
+
+export function triggerFollowUpTask(
+  task: RunTask,
+  sourceLabel: string,
+  options?: {
+    xStatusUrl?: string | null;
+    topicBatchLimit?: number | null;
+  }
+): RunHistoryEntry {
+  return startDetachedTask(task, "follow_up", {
+    ...options,
+    sourceLabel
+  });
 }
 
 export function evaluateSchedule(now = new Date()): {
@@ -480,6 +512,17 @@ export function evaluateSchedule(now = new Date()): {
   }
 
   const entry = triggerTask("crawl_x_api", "scheduled");
+  const priorityAccounts = readPriorityAccountsConfig();
+  if (priorityAccounts.enabled && priorityAccounts.accounts.length > 0) {
+    const activePriorityRun = findActiveRun(reconciledHistory.entries, "capture_priority_accounts");
+    if (!activePriorityRun) {
+      triggerFollowUpTask("capture_priority_accounts", `scheduled crawl ${entry.runControlId}`);
+    } else {
+      appendSchedulerEvent(
+        `skipped priority-account capture for slot ${dueSlotAt}; active run ${activePriorityRun.runControlId} is still running`
+      );
+    }
+  }
   const updatedConfig: SchedulerConfig = {
     ...nextConfig,
     lastTriggeredAt: entry.startedAt,

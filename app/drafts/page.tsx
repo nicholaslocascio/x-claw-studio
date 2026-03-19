@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ComposeRunReference } from "@/src/components/compose-run-reference";
 import { DraftOutputCard } from "@/src/components/draft-output-card";
 import { MediaPreview } from "@/src/components/media-preview";
 import type { UsageAnalysis } from "@/src/lib/types";
@@ -60,6 +61,10 @@ function buildAnalysisHighlights(analysis: UsageAnalysis | null | undefined): Ar
 
 export default function DraftsPage() {
   const drafts = listGeneratedDraftViews({ limit: 100 });
+  const runningCount = drafts.filter((item) => item.status === "running").length;
+  const failedCount = drafts.filter((item) => item.status === "failed").length;
+  const completeCount = drafts.filter((item) => item.status === "complete").length;
+  const latestDraft = drafts[0] ?? null;
 
   return (
     <main className="app-shell">
@@ -85,7 +90,7 @@ export default function DraftsPage() {
             <div>
               <h1 className="section-title mt-1">Generated drafts</h1>
               <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
-                Each draft now shows the source tweet or topic, the asset in play, and the analysis context the composer had when it wrote.
+                Review what is still running, what is ready to post, and what needs a second pass without digging through repeated controls.
               </p>
             </div>
             <Link href="/" className="tt-link">
@@ -97,10 +102,33 @@ export default function DraftsPage() {
 
       <section className="relative z-10 mb-8 terminal-panel">
         <div className="panel-body">
+          <div className="mb-5 grid gap-3 lg:grid-cols-3">
+            <article className="tt-lead-card">
+              <div className="tt-data-label">Needs attention</div>
+              <p className="mt-3 text-base leading-7 text-slate-100">
+                {failedCount > 0
+                  ? `${failedCount} draft runs failed and want a closer look.`
+                  : runningCount > 0
+                    ? `${runningCount} draft runs are still working.`
+                    : "Nothing is stuck right now."}
+              </p>
+            </article>
+            <article className="tt-subpanel-soft">
+              <div className="tt-data-label">Ready to post</div>
+              <p className="mt-3 text-sm leading-6 text-slate-200">{completeCount} completed draft sets are available.</p>
+            </article>
+            <article className="tt-subpanel-soft">
+              <div className="tt-data-label">Latest update</div>
+              <p className="mt-3 text-sm leading-6 text-slate-200">
+                {latestDraft ? `${formatKindLabel(latestDraft.kind)} updated ${formatDate(latestDraft.updatedAt)}.` : "No saved drafts yet."}
+              </p>
+            </article>
+          </div>
+
           <div className="mb-5 flex flex-wrap gap-2">
-            <span className="tt-chip tt-chip-accent">{drafts.filter((item) => item.status === "running").length} running</span>
-            <span className="tt-chip">{drafts.filter((item) => item.status === "complete").length} complete</span>
-            <span className="tt-chip">{drafts.filter((item) => item.status === "failed").length} failed</span>
+            <span className="tt-chip tt-chip-accent">{runningCount} running</span>
+            <span className="tt-chip">{completeCount} complete</span>
+            <span className="tt-chip">{failedCount} failed</span>
             <span className="tt-chip">{drafts.length} tracked</span>
           </div>
 
@@ -138,8 +166,11 @@ export default function DraftsPage() {
                         <div className="tt-data-label">Current Status</div>
                         <p className="mt-2 text-sm leading-6 text-slate-200">{draft.progressMessage}</p>
                         {draft.progressDetail ? <p className="mt-2 text-xs uppercase tracking-[0.12em] text-cyan">{draft.progressDetail}</p> : null}
+                        <ComposeRunReference draft={draft} />
                       </div>
                     ) : null}
+
+                    {!draft.progressMessage ? <ComposeRunReference draft={draft} className="tt-subpanel-soft" /> : null}
 
                     {draft.errorMessage ? <div className="tt-chip tt-chip-danger">{draft.errorMessage}</div> : null}
 
@@ -222,6 +253,15 @@ export default function DraftsPage() {
                                 outputIndex={index}
                                 replyTargetUrl={draft.kind === "reply" ? draft.sourceTweet?.tweetUrl ?? null : null}
                                 draftTitle={draft.kind === "reply" ? `${output.goal ?? "reply"} reply` : draft.topic?.label ?? draft.sourceAsset?.assetId ?? "draft"}
+                                regenerateReplyRequest={
+                                  draft.kind === "reply"
+                                    ? {
+                                        usageId: draft.usageId,
+                                        tweetId: draft.tweetId,
+                                        goal: draft.requestGoal ?? output.goal
+                                      }
+                                    : null
+                                }
                               />
                             ))}
                           </div>

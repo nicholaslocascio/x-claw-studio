@@ -14,7 +14,7 @@ import type {
 
 const projectRoot = process.cwd();
 const topicIndexPath = path.join(projectRoot, "data", "analysis", "topics", "index.json");
-const TOPIC_HALF_LIFE_HOURS = 18;
+const TOPIC_HALF_LIFE_HOURS = 30;
 const TOPIC_STALE_AFTER_HOURS = 72;
 const GENERIC_LABELS = new Set([
   "the",
@@ -97,6 +97,11 @@ function normalizeLabel(label: string): string {
     .replace(/[“”"']/g, "")
     .replace(/\.$/, "")
     .toLowerCase();
+}
+
+function normalizeAuthorUsername(value: string | null | undefined): string | null {
+  const normalized = value?.trim().replace(/^@+/, "").toLowerCase() ?? "";
+  return normalized || null;
 }
 
 function titleCaseCompact(label: string): string {
@@ -220,6 +225,7 @@ export function computeTopicHotnessScore(input: {
   tweetCount: number;
   uniqueAuthorCount: number;
   totalLikes: number;
+  priorityTweetCount?: number;
   recentTweetCount24h: number;
   mostRecentTimestampMs: number;
   nowMs?: number;
@@ -227,14 +233,15 @@ export function computeTopicHotnessScore(input: {
   const nowMs = input.nowMs ?? Date.now();
   const ageHours = Math.max(0, (nowMs - input.mostRecentTimestampMs) / (1000 * 60 * 60));
   const decay = Math.exp((-Math.log(2) * ageHours) / TOPIC_HALF_LIFE_HOURS);
-  const momentum = input.recentTweetCount24h / Math.max(1, input.tweetCount);
+  const recentShare = Math.min(1, input.recentTweetCount24h / Math.max(1, input.tweetCount));
   const engagement =
     1 +
     1.8 * Math.log1p(Math.max(1, input.tweetCount)) +
     1.2 * Math.log1p(Math.max(1, input.uniqueAuthorCount)) +
     1.1 * Math.log1p(Math.max(0, input.totalLikes)) +
-    2.2 * momentum;
-  const score = engagement * decay;
+    1.2 * recentShare;
+  const priorityBoost = 1 + Math.min(0.75, Math.max(0, input.priorityTweetCount ?? 0) * 0.2);
+  const score = engagement * decay * priorityBoost;
   return Number.isFinite(score) ? Number(score.toFixed(4)) : 0;
 }
 
@@ -278,6 +285,7 @@ export function buildTopicIndex(input: {
   usages: TweetUsageRecord[];
   topicAnalyses: TweetTopicAnalysisRecord[];
   nowMs?: number;
+  priorityAuthorUsernames?: Set<string>;
 }): TopicIndex {
   const analysisByTweetKey = new Map(input.topicAnalyses.map((analysis) => [analysis.tweetKey, analysis]));
   const usageByTweetKey = new Map<string, TweetUsageRecord[]>();
@@ -302,6 +310,8 @@ export function buildTopicIndex(input: {
       usageIds: Set<string>;
       authors: Set<string>;
       totalLikes: number;
+      priorityTweetCount: number;
+      priorityAuthors: Set<string>;
       recentTweetCount24h: number;
       timestamps: number[];
       textOnlyTweetCount: number;
@@ -344,6 +354,8 @@ export function buildTopicIndex(input: {
           usageIds: new Set<string>(),
           authors: new Set<string>(),
           totalLikes: 0,
+          priorityTweetCount: 0,
+          priorityAuthors: new Set<string>(),
           recentTweetCount24h: 0,
           timestamps: [],
           textOnlyTweetCount: 0,
@@ -362,6 +374,11 @@ export function buildTopicIndex(input: {
         bucket.authors.add(tweet.authorUsername);
       }
       bucket.totalLikes += likes;
+      const normalizedAuthorUsername = normalizeAuthorUsername(tweet.authorUsername);
+      if (normalizedAuthorUsername && input.priorityAuthorUsernames?.has(normalizedAuthorUsername)) {
+        bucket.priorityTweetCount += 1;
+        bucket.priorityAuthors.add(normalizedAuthorUsername);
+      }
       if (isRecent) {
         bucket.recentTweetCount24h += 1;
       }
@@ -407,6 +424,7 @@ export function buildTopicIndex(input: {
         tweetCount: bucket.tweetKeys.size,
         uniqueAuthorCount: bucket.authors.size,
         totalLikes: bucket.totalLikes,
+        priorityTweetCount: bucket.priorityTweetCount,
         recentTweetCount24h: bucket.recentTweetCount24h,
         mostRecentTimestampMs,
         nowMs
@@ -426,6 +444,8 @@ export function buildTopicIndex(input: {
         textOnlyTweetCount: bucket.textOnlyTweetCount,
         uniqueAuthorCount: bucket.authors.size,
         totalLikes: bucket.totalLikes,
+        priorityTweetCount: bucket.priorityTweetCount,
+        priorityAuthorCount: bucket.priorityAuthors.size,
         recentTweetCount24h: bucket.recentTweetCount24h,
         mostRecentAt: mostRecentTimestampMs > 0 ? new Date(mostRecentTimestampMs).toISOString() : null,
         oldestAt: oldestTimestampMs > 0 ? new Date(oldestTimestampMs).toISOString() : null,

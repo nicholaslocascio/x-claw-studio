@@ -62,7 +62,7 @@ Usage:
   x-media-analyst <noun> <verb> [args...]
 
 Core commands:
-  x-media-analyst search facets --query "<query>" [--facet <name>] [--limit <n>] [--format json|jsonl]
+  x-media-analyst search facets --query "<query>" [--facet <name>] [--media-kind <kind[,kind]>] [--all] [--limit <n>] [--format json|jsonl]
   x-media-analyst search tweets [--query "<query>"] [--filter all|with_media|without_media] [--page <n>] [--limit <n>] [--format json|jsonl]
   x-media-analyst search topics --query "<query>" [--limit <n>] [--format json|jsonl]
   x-media-analyst facet list [--format json|jsonl]
@@ -78,6 +78,8 @@ Core commands:
   x-media-analyst analyze missing
   x-media-analyst analyze tweet -- <tweetId> <mediaIndex>
   x-media-analyst eval compose-quality [--case reply|topic|media|all]
+  x-media-analyst eval trend-quality [--example <id>|--file <path>|--text <text>]
+  x-media-analyst eval search-quality [--fixture <id>]
   x-media-analyst media rebuild
   x-media-analyst media backfill-native-types
   x-media-analyst wishlist list
@@ -97,7 +99,7 @@ Utility commands:
 
 Examples:
   x-media-analyst facet list
-  x-media-analyst search facets --query "reaction image" --format jsonl
+  x-media-analyst search facets --query "reaction image" --video-only
   x-media-analyst search tweets --filter with_media --page 2
   x-media-analyst search topics --query "OpenAI pricing backlash"
   x-media-analyst wishlist list --status pending
@@ -165,6 +167,10 @@ const commands: Record<string, CommandNode> = {
         summary: "Run a bounded X API timeline capture.",
         handler: (args) => runTsCli("capture-x-api-timeline.ts", args)
       },
+      "priority-accounts": {
+        summary: "Check watched accounts for new posts and save them through the normal capture pipeline.",
+        handler: (args) => runTsCli("capture-priority-accounts.ts", args)
+      },
       "x-api-tweet": {
         summary: "Look up one tweet by status URL and persist its assets.",
         handler: (args) => runTsCli("capture-x-api-tweet.ts", args)
@@ -210,6 +216,14 @@ const commands: Record<string, CommandNode> = {
       "compose-quality": {
         summary: "Run fixed compose-quality fixtures through Gemini CLI and score the output style.",
         handler: (args) => runTsCli("eval-compose-quality.ts", args)
+      },
+      "trend-quality": {
+        summary: "Score trend-digest tweets against the stacked-breaking-news rubric.",
+        handler: (args) => runTsCli("eval-trend-quality.ts", args)
+      },
+      "search-quality": {
+        summary: "Run real-data search fixtures and score retrieval relevance.",
+        handler: (args) => runTsCli("eval-search-quality.ts", args)
       }
     }
   },

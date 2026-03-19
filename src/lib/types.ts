@@ -9,6 +9,8 @@ export interface TweetMetrics {
   views: string | null;
 }
 
+export type RelativeEngagementBand = "baseline" | "strong" | "breakout";
+
 export interface TweetMedia {
   mediaKind: MediaKind;
   sourceUrl: string | null;
@@ -37,10 +39,12 @@ export interface ExtractedTweet {
   sourceName: string;
   tweetId: string | null;
   tweetUrl: string | null;
+  authorUserId?: string | null;
   authorHandle: string | null;
   authorUsername: string | null;
   authorDisplayName: string | null;
   authorProfileImageUrl: string | null;
+  authorFollowerCount?: number | null;
   createdAt: string | null;
   text: string | null;
   metrics: TweetMetrics;
@@ -153,6 +157,8 @@ export interface MediaAssetSummary {
   updatedAt: string;
 }
 
+export type MediaAssetSyncStatus = "not_applicable" | "indexed" | "stale" | "missing";
+
 export interface TweetUsageRecord {
   usageId: string;
   tweet: ExtractedTweet;
@@ -166,23 +172,32 @@ export interface TweetUsageRecord {
   phashMatchCount: number;
   duplicateGroupId: string | null;
   duplicateGroupUsageCount: number;
+  mediaAssetSyncStatus?: MediaAssetSyncStatus;
   hotnessScore: number;
 }
 
 export interface CapturedTweetRecord {
   tweetKey: string;
   tweet: ExtractedTweet;
+  isPriorityAccount?: boolean;
   hasMedia: boolean;
   mediaCount: number;
   analyzedMediaCount: number;
+  indexedMediaCount?: number;
+  staleMediaCount?: number;
+  missingMediaCount?: number;
+  mediaAssetSyncStatus?: MediaAssetSyncStatus;
   firstMediaAssetId: string | null;
   firstMediaAssetStarred: boolean;
   topicLabels: string[];
   topTopicLabel: string | null;
   topTopicHotnessScore: number;
+  relativeEngagementScore: number | null;
+  relativeEngagementBand: RelativeEngagementBand | null;
 }
 
 export type CapturedTweetFilter = "with_media" | "without_media" | "all";
+export type CapturedTweetSort = "newest_desc" | "newest_asc";
 
 export interface CapturedTweetPage {
   tweets: CapturedTweetRecord[];
@@ -194,7 +209,33 @@ export interface CapturedTweetPage {
   hasNextPage: boolean;
   query: string;
   tweetFilter: CapturedTweetFilter;
+  sort: CapturedTweetSort;
   counts: Record<CapturedTweetFilter, number>;
+}
+
+export type UsageMatchFilter = "all" | "matched" | "phash" | "starred" | "starred_or_duplicates";
+export type UsageSort =
+  | "newest_desc"
+  | "newest_asc"
+  | "duplicates_desc"
+  | "duplicates_asc"
+  | "hotness_desc"
+  | "hotness_asc";
+
+export interface UsagePage {
+  usages: TweetUsageRecord[];
+  page: number;
+  pageSize: number;
+  totalResults: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+  query: string;
+  matchFilter: UsageMatchFilter;
+  repeatMinimum: number;
+  sort: UsageSort;
+  hideDuplicateAssets: boolean;
+  counts: Record<UsageMatchFilter, number>;
 }
 
 export type TopicSignalKind = "entity" | "cashtag" | "hashtag" | "phrase" | "reference" | "brand" | "intent";
@@ -265,6 +306,8 @@ export interface TopicClusterRecord {
   textOnlyTweetCount: number;
   uniqueAuthorCount: number;
   totalLikes: number;
+  priorityTweetCount?: number;
+  priorityAuthorCount?: number;
   recentTweetCount24h: number;
   mostRecentAt: string | null;
   oldestAt: string | null;
@@ -313,6 +356,35 @@ export interface TopicIndex {
   topics: TopicClusterRecord[];
 }
 
+export type TopicClusterSort =
+  | "hotness_desc"
+  | "hotness_asc"
+  | "newest_desc"
+  | "newest_asc"
+  | "tweets_desc"
+  | "tweets_asc"
+  | "likes_desc"
+  | "likes_asc"
+  | "recent_24h_desc"
+  | "recent_24h_asc";
+export type TopicClusterFreshnessFilter = "all" | "fresh" | "active_24h" | "active_72h" | "stale";
+export type TopicClusterKindFilter = TopicSignalKind | "all";
+
+export interface TopicClusterPage {
+  topics: TopicClusterRecord[];
+  page: number;
+  pageSize: number;
+  totalResults: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+  query: string;
+  sort: TopicClusterSort;
+  freshness: TopicClusterFreshnessFilter;
+  kind: TopicClusterKindFilter;
+  counts: Record<TopicClusterFreshnessFilter, number>;
+}
+
 export interface MediaAssetPhashMatch {
   asset: MediaAssetRecord;
   distance: number | null;
@@ -331,6 +403,7 @@ export interface MediaAssetView {
 export type RunTask =
   | "crawl_timeline"
   | "crawl_x_api"
+  | "capture_priority_accounts"
   | "capture_x_api_timeline"
   | "capture_x_api_tweet"
   | "capture_x_api_tweet_and_compose_replies"
@@ -338,7 +411,7 @@ export type RunTask =
   | "analyze_topics"
   | "rebuild_media_assets"
   | "backfill_media_native_types";
-export type RunTrigger = "manual" | "scheduled";
+export type RunTrigger = "manual" | "scheduled" | "follow_up";
 export type RunStatus = "queued" | "running" | "completed" | "failed";
 
 export interface SchedulerConfig {
@@ -354,6 +427,25 @@ export interface SchedulerConfig {
   lastProcessedSlotAt: string | null;
   lastSkippedAt: string | null;
   lastSkipReason: string | null;
+}
+
+export interface PriorityAccountEntry {
+  key: string;
+  username: string;
+  label: string | null;
+  userId: string | null;
+  lastSeenTweetId: string | null;
+  lastCheckedAt: string | null;
+  lastCapturedAt: string | null;
+  lastCaptureCount: number;
+  lastError: string | null;
+}
+
+export interface PriorityAccountsConfig {
+  enabled: boolean;
+  updatedAt: string;
+  lastScheduledRunAt: string | null;
+  accounts: PriorityAccountEntry[];
 }
 
 export interface RunHistoryEntry {

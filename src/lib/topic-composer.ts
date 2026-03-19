@@ -17,31 +17,31 @@ export const topicPostRequestSchema = z.object({
   goal: z.enum(TOPIC_POST_GOALS).default("insight"),
   mode: z.enum(["single", "all_goals"]).default("single"),
   maxConcurrency: z.coerce.number().int().min(1).max(TOPIC_POST_GOALS.length).optional(),
-  toneHint: z.string().trim().max(120).optional(),
-  angleHint: z.string().trim().max(280).optional(),
-  constraints: z.string().trim().max(280).optional()
+  toneHint: z.string().trim().optional(),
+  angleHint: z.string().trim().optional(),
+  constraints: z.string().trim().optional()
 });
 
 export type TopicPostRequest = z.infer<typeof topicPostRequestSchema>;
 
 export const topicPostPlanSchema = z.object({
-  angle: z.string().min(1).max(240),
-  tone: z.string().min(1).max(120),
-  postIntent: z.string().min(1).max(240),
-  targetReaction: z.string().min(1).max(240),
-  searchQueries: z.array(z.string().min(1).max(160)).min(2).max(4),
-  candidateSelectionCriteria: z.array(z.string().min(1).max(160)).min(2).max(6),
-  avoid: z.array(z.string().min(1).max(160)).max(6)
+  angle: z.string().min(1),
+  tone: z.string().min(1),
+  postIntent: z.string().min(1),
+  targetReaction: z.string().min(1),
+  searchQueries: z.array(z.string().min(1)).min(2),
+  candidateSelectionCriteria: z.array(z.string().min(1)).min(2),
+  avoid: z.array(z.string().min(1))
 });
 
 export type TopicPostPlan = z.infer<typeof topicPostPlanSchema>;
 
 export const topicPostDraftSchema = z.object({
-  tweetText: z.string().min(1).max(280),
+  tweetText: z.string().min(1),
   selectedCandidateId: z.string().min(1).nullable(),
-  mediaSelectionReason: z.string().min(1).max(400),
-  whyThisTweetWorks: z.string().min(1).max(400),
-  postingNotes: z.string().min(1).max(400).nullable()
+  mediaSelectionReason: z.string().min(1),
+  whyThisTweetWorks: z.string().min(1),
+  postingNotes: z.string().min(1).nullable()
 });
 
 export type TopicPostDraft = z.infer<typeof topicPostDraftSchema>;

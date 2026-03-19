@@ -86,6 +86,45 @@ function normalizeMediaUrl(media: TweetMedia): string | null {
   return media.posterUrl ?? media.previewUrl ?? media.sourceUrl ?? null;
 }
 
+function collectCandidateMatchUrls(candidate: MediaCandidate, manifests: CrawlManifest[]): string[] {
+  return Array.from(
+    new Set(
+      [
+        normalizeMediaUrl(candidate.media),
+        candidate.media.sourceUrl,
+        candidate.media.previewUrl,
+        candidate.media.posterUrl,
+        ...findRelatedSourceUrls(candidate.media, manifests)
+      ].filter((value): value is string => Boolean(value))
+    )
+  );
+}
+
+export function assetMatchesCandidateByUrl(
+  asset: MediaAssetRecord,
+  candidateUrls: string[],
+  candidateRequestKeys: string[]
+): boolean {
+  const assetUrls = [
+    asset.canonicalMediaUrl,
+    ...asset.sourceUrls,
+    ...asset.previewUrls,
+    ...asset.posterUrls
+  ].filter((value): value is string => Boolean(value));
+  const assetUrlSet = new Set(assetUrls);
+
+  if (candidateUrls.some((url) => assetUrlSet.has(url))) {
+    return true;
+  }
+
+  if (candidateRequestKeys.length === 0) {
+    return false;
+  }
+
+  const assetRequestKeys = new Set(assetUrls.map((url) => extractMediaRequestKey(url)).filter(Boolean));
+  return candidateRequestKeys.some((key) => assetRequestKeys.has(key));
+}
+
 function readStarredAssetIds(): Set<string> {
   const file = readJsonFile<MediaAssetStarsFile>(assetStarsPath);
   return new Set(file?.starredAssetIds ?? []);
@@ -427,6 +466,51 @@ function buildUsageGroups(usages: TweetUsageRecord[]): Map<string, TweetUsageRec
   return usageGroups;
 }
 
+function computeAssetSimilarityMatch(input: {
+  left: MediaAssetRecord;
+  right: MediaAssetRecord;
+  maxDistance: number;
+  minSimilarity: number;
+  includeAllNeighbors: boolean;
+}): { distance: number | null; similarityScore: number } | null {
+  const { left, right, maxDistance, minSimilarity, includeAllNeighbors } = input;
+
+  let distance: number | null = null;
+  let similarityScore = Number.NEGATIVE_INFINITY;
+
+  const leftEmbedding = left.similarityEmbedding;
+  const rightEmbedding = right.similarityEmbedding;
+  if (
+    leftEmbedding != null &&
+    rightEmbedding != null &&
+    leftEmbedding.values.length > 0 &&
+    rightEmbedding.values.length > 0 &&
+    leftEmbedding.model === rightEmbedding.model &&
+    leftEmbedding.outputDimensionality === rightEmbedding.outputDimensionality
+  ) {
+    similarityScore = cosineSimilarity(leftEmbedding.values, rightEmbedding.values);
+    if (!includeAllNeighbors && similarityScore < minSimilarity) {
+      return null;
+    }
+  } else {
+    if (!left.fingerprint?.hex || !right.fingerprint?.hex) {
+      return null;
+    }
+
+    distance = hammingDistanceHex(left.fingerprint.hex, right.fingerprint.hex);
+    if (!includeAllNeighbors && distance > maxDistance) {
+      return null;
+    }
+
+    similarityScore = 1 - distance / 64;
+  }
+
+  return {
+    distance,
+    similarityScore
+  };
+}
+
 export async function buildMediaAssetIndex(input: {
   usages: TweetUsageRecord[];
   manifests: CrawlManifest[];
@@ -490,19 +574,25 @@ export async function syncMediaAssetIndex(input: {
   const touchedAssetIds = new Set<string>();
 
   for (const candidate of candidates) {
+    const candidateUrls = collectCandidateMatchUrls(candidate, input.manifests);
+    const candidateRequestKeys = Array.from(
+      new Set(candidateUrls.map((url) => extractMediaRequestKey(url)).filter((value): value is string => Boolean(value)))
+    );
     const fingerprint = candidate.filePath ? await computeDifferenceHash(candidate.filePath) : null;
-    const matched = assets.find((asset) => {
-      if (!asset.fingerprint?.hex || !fingerprint?.hex) {
-        return false;
-      }
+    const matched =
+      assets.find((asset) => assetMatchesCandidateByUrl(asset, candidateUrls, candidateRequestKeys)) ??
+      assets.find((asset) => {
+        if (!asset.fingerprint?.hex || !fingerprint?.hex) {
+          return false;
+        }
 
-      return hammingDistanceHex(asset.fingerprint.hex, fingerprint.hex) <= EXACT_ASSET_MATCH_DISTANCE;
-    });
+        return hammingDistanceHex(asset.fingerprint.hex, fingerprint.hex) <= EXACT_ASSET_MATCH_DISTANCE;
+      });
 
     if (matched) {
       matched.updatedAt = now;
       matched.usageIds.push(candidate.usageId);
-      for (const sourceUrl of findRelatedSourceUrls(candidate.media, input.manifests)) {
+      for (const sourceUrl of candidateUrls) {
         matched.sourceUrls.push(sourceUrl);
       }
       if (candidate.media.previewUrl) matched.previewUrls.push(candidate.media.previewUrl);
@@ -798,52 +888,31 @@ function buildAssetSimilarityMap(input: {
 
     for (let compareIndex = index + 1; compareIndex < input.assets.length; compareIndex += 1) {
       const right = input.assets[compareIndex];
-      if (!right.fingerprint?.hex) {
-        if (!right.similarityEmbedding?.values?.length) {
-          continue;
-        }
+      if (!right.fingerprint?.hex && !right.similarityEmbedding?.values?.length) {
+        continue;
       }
 
-      let distance: number | null = null;
-      let similarityScore = Number.NEGATIVE_INFINITY;
-
-      const leftEmbedding = left.similarityEmbedding;
-      const rightEmbedding = right.similarityEmbedding;
-      if (
-        leftEmbedding != null &&
-        rightEmbedding != null &&
-        leftEmbedding.values.length > 0 &&
-        rightEmbedding.values.length > 0 &&
-        leftEmbedding.model === rightEmbedding.model &&
-        leftEmbedding.outputDimensionality === rightEmbedding.outputDimensionality
-      ) {
-        similarityScore = cosineSimilarity(leftEmbedding.values, rightEmbedding.values);
-        if (!input.includeAllNeighbors && similarityScore < minSimilarity) {
-          continue;
-        }
-      } else {
-        if (!left.fingerprint?.hex || !right.fingerprint?.hex) {
-          continue;
-        }
-
-        distance = hammingDistanceHex(left.fingerprint.hex, right.fingerprint.hex);
-        if (!input.includeAllNeighbors && distance > maxDistance) {
-          continue;
-        }
-
-        similarityScore = 1 - distance / 64;
+      const match = computeAssetSimilarityMatch({
+        left,
+        right,
+        maxDistance,
+        minSimilarity,
+        includeAllNeighbors: input.includeAllNeighbors
+      });
+      if (!match) {
+        continue;
       }
 
       matchMap[left.assetId].push({
         asset: right,
-        distance,
-        similarityScore,
+        distance: match.distance,
+        similarityScore: match.similarityScore,
         usages: usageGroups.get(right.assetId) ?? []
       });
       matchMap[right.assetId].push({
         asset: left,
-        distance,
-        similarityScore,
+        distance: match.distance,
+        similarityScore: match.similarityScore,
         usages: usageGroups.get(left.assetId) ?? []
       });
     }
@@ -870,6 +939,72 @@ function buildAssetSimilarityMap(input: {
   return matchMap;
 }
 
+function buildAssetSimilarityMatchesForAsset(input: {
+  targetAssetId: string;
+  assets: MediaAssetRecord[];
+  usages: TweetUsageRecord[];
+  maxDistance?: number;
+  minSimilarity?: number;
+  includeAllNeighbors: boolean;
+  limit?: number;
+}): MediaAssetPhashMatch[] {
+  const maxDistance = input.maxDistance ?? DEFAULT_PHASH_MATCH_DISTANCE;
+  const minSimilarity = input.minSimilarity ?? DEFAULT_MEDIA_MATCH_SIMILARITY;
+  const usageGroups = buildUsageGroups(input.usages);
+  const target = input.assets.find((asset) => asset.assetId === input.targetAssetId);
+
+  if (!target || (!target.fingerprint?.hex && !target.similarityEmbedding?.values?.length)) {
+    return [];
+  }
+
+  const matches: MediaAssetPhashMatch[] = [];
+  for (const asset of input.assets) {
+    if (asset.assetId === target.assetId) {
+      continue;
+    }
+
+    if (!asset.fingerprint?.hex && !asset.similarityEmbedding?.values?.length) {
+      continue;
+    }
+
+    const match = computeAssetSimilarityMatch({
+      left: target,
+      right: asset,
+      maxDistance,
+      minSimilarity,
+      includeAllNeighbors: input.includeAllNeighbors
+    });
+    if (!match) {
+      continue;
+    }
+
+    matches.push({
+      asset,
+      distance: match.distance,
+      similarityScore: match.similarityScore,
+      usages: usageGroups.get(asset.assetId) ?? []
+    });
+  }
+
+  matches.sort((left, right) => {
+    if (left.similarityScore !== right.similarityScore) {
+      return right.similarityScore - left.similarityScore;
+    }
+
+    if ((left.distance ?? Number.MAX_SAFE_INTEGER) !== (right.distance ?? Number.MAX_SAFE_INTEGER)) {
+      return (left.distance ?? Number.MAX_SAFE_INTEGER) - (right.distance ?? Number.MAX_SAFE_INTEGER);
+    }
+
+    return right.usages.length - left.usages.length;
+  });
+
+  if (input.limit && input.limit > 0) {
+    return matches.slice(0, input.limit);
+  }
+
+  return matches;
+}
+
 function buildNearestNeighborMap(input: {
   assets: MediaAssetRecord[];
   usages: TweetUsageRecord[];
@@ -886,11 +1021,14 @@ function buildNearestNeighborMap(input: {
 export function buildDuplicateGroupMap(input: {
   assets: MediaAssetRecord[];
   usages: TweetUsageRecord[];
+  phashMatchMap?: Record<string, MediaAssetPhashMatch[]>;
 }): Record<string, { groupId: string; usageIds: string[] }> {
-  const phashMatchMap = buildPhashMatchMap({
-    assets: input.assets,
-    usages: input.usages
-  });
+  const phashMatchMap =
+    input.phashMatchMap ??
+    buildPhashMatchMap({
+      assets: input.assets,
+      usages: input.usages
+    });
   const usageGroups = new Map<string, string[]>();
 
   for (const usage of input.usages) {
@@ -966,13 +1104,17 @@ export function getMediaAssetView(input: {
   }
 
   const summaries = readMediaAssetSummaries();
-  const phashMatchMap = buildPhashMatchMap({
-    assets: index.assets,
-    usages: input.usages
-  });
-  const nearestNeighborMap = buildNearestNeighborMap({
+  const phashMatches = buildAssetSimilarityMatchesForAsset({
+    targetAssetId: assetId,
     assets: index.assets,
     usages: input.usages,
+    includeAllNeighbors: false
+  });
+  const nearestNeighbors = buildAssetSimilarityMatchesForAsset({
+    targetAssetId: assetId,
+    assets: index.assets,
+    usages: input.usages,
+    includeAllNeighbors: true,
     limit: 10
   });
 
@@ -980,8 +1122,8 @@ export function getMediaAssetView(input: {
     asset,
     summary: summaries?.summaries.find((item) => item.assetId === assetId) ?? null,
     duplicateUsages: input.usages.filter((usage) => asset.usageIds.includes(usage.usageId)),
-    phashMatches: phashMatchMap[assetId] ?? [],
-    nearestNeighbors: nearestNeighborMap[assetId] ?? []
+    phashMatches,
+    nearestNeighbors
   };
 }
 

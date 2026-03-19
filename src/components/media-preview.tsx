@@ -9,6 +9,8 @@ interface MediaPreviewProps {
   videoFilePath?: string | null;
   videoUrl?: string | null;
   showVideoByDefault?: boolean;
+  playOnClick?: boolean;
+  fit?: "cover" | "native";
 }
 
 export function MediaPreview({
@@ -16,7 +18,9 @@ export function MediaPreview({
   imageUrl,
   videoFilePath,
   videoUrl: remoteVideoUrl,
-  showVideoByDefault = false
+  showVideoByDefault = false,
+  playOnClick = true,
+  fit = "cover"
 }: MediaPreviewProps) {
   const resolvedVideoUrl = useMemo(
     () => buildLocalMediaUrl(videoFilePath) ?? remoteVideoUrl ?? null,
@@ -24,6 +28,7 @@ export function MediaPreview({
   );
   const [isPlaying, setIsPlaying] = useState(showVideoByDefault && Boolean(resolvedVideoUrl));
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaClassName = fit === "native" ? "w-full h-auto object-contain" : "h-full w-full object-cover";
 
   useEffect(() => {
     if (!resolvedVideoUrl) {
@@ -82,12 +87,32 @@ export function MediaPreview({
         autoPlay
         playsInline
         preload="metadata"
-        className="h-full w-full object-cover"
+        className={mediaClassName}
       />
     );
   }
 
   if (resolvedVideoUrl) {
+    const previewBody = (
+      <>
+        {imageUrl ? (
+          <img src={imageUrl} alt={alt} className={`${mediaClassName} transition-transform duration-200 ease-linear group-hover:scale-[1.02]`} />
+        ) : (
+          <div className="grid h-full w-full place-items-center bg-black/90 font-[family:var(--font-mono)] text-sm uppercase tracking-[0.26em] text-cyan">
+            video ready
+          </div>
+        )}
+        <span className="pointer-events-none absolute inset-0 bg-black/4 transition-colors duration-200 ease-linear group-hover:bg-black/8" />
+        <span className="pointer-events-none absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/72 text-slate-950 shadow-[0_8px_20px_rgba(0,0,0,0.18)] transition-transform duration-200 ease-linear group-hover:scale-105 group-hover:bg-white/80">
+          <span aria-hidden="true" className="ml-0.5 text-sm leading-none">▶</span>
+        </span>
+      </>
+    );
+
+    if (!playOnClick) {
+      return <div className="group relative block h-full w-full bg-transparent">{previewBody}</div>;
+    }
+
     return (
       <button
         type="button"
@@ -95,22 +120,13 @@ export function MediaPreview({
         onClick={() => setIsPlaying(true)}
         aria-label={`Play video: ${alt}`}
       >
-        {imageUrl ? (
-          <img src={imageUrl} alt={alt} className="h-full w-full object-cover transition-transform duration-200 ease-linear group-hover:scale-[1.02]" />
-        ) : (
-          <div className="grid h-full w-full place-items-center bg-black/90 font-[family:var(--font-mono)] text-sm uppercase tracking-[0.26em] text-cyan">
-            video ready
-          </div>
-        )}
-        <span className="absolute bottom-3 right-3 border border-cyan bg-black/75 px-3 py-2 font-[family:var(--font-mono)] text-[11px] uppercase tracking-[0.26em] text-cyan shadow-[0_0_16px_rgba(0,255,255,0.18)] transition-colors duration-200 ease-linear group-hover:bg-cyan group-hover:text-black">
-          Play video
-        </span>
+        {previewBody}
       </button>
     );
   }
 
   if (imageUrl) {
-    return <img src={imageUrl} alt={alt} className="h-full w-full object-cover" />;
+    return <img src={imageUrl} alt={alt} className={mediaClassName} />;
   }
 
   return (

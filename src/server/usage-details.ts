@@ -1,11 +1,11 @@
 import { ANALYSIS_FACET_NAMES, type AnalysisFacetName } from "@/src/lib/analysis-schema";
-import { getDashboardData } from "@/src/server/data";
+import { getUsageDetailData } from "@/src/server/data";
 import { searchTopicIndex, type TopicSearchRow } from "@/src/server/chroma-facets";
 import { getMediaAssetView } from "@/src/server/media-assets";
-import type { MediaAssetView } from "@/src/lib/types";
+import type { MediaAssetView, TweetUsageRecord } from "@/src/lib/types";
 
 function buildRelevantTopicQuery(
-  usage: ReturnType<typeof getDashboardData>["tweetUsages"][number]
+  usage: TweetUsageRecord
 ): string | null {
   const parts = new Set<string>();
   const analysis = usage.analysis;
@@ -72,13 +72,13 @@ function dedupeRelevantTopics(rows: TopicSearchRow[], tweetId: string | null): T
     .slice(0, 6);
 }
 
-export async function getUsageDetail(usageId: string): Promise<(ReturnType<typeof getDashboardData>["tweetUsages"][number] & {
+export async function getUsageDetail(usageId: string): Promise<(TweetUsageRecord & {
   mediaAssetView: MediaAssetView | null;
-  orderedFacets: Array<{ name: string; value: ReturnType<typeof getDashboardData>["tweetUsages"][number]["analysis"][AnalysisFacetName] }>;
+  orderedFacets: Array<{ name: string; value: TweetUsageRecord["analysis"][AnalysisFacetName] }>;
   relevantTopics: TopicSearchRow[];
 }) | null> {
-  const data = getDashboardData();
-  const match = data.tweetUsages.find((usage) => usage.usageId === usageId);
+  const data = getUsageDetailData(usageId);
+  const match = data.usage;
 
   if (!match) {
     return null;
@@ -97,7 +97,7 @@ export async function getUsageDetail(usageId: string): Promise<(ReturnType<typeo
     ...match,
     mediaAssetView: getMediaAssetView({
       usageId,
-      usages: data.tweetUsages
+      usages: data.usages
     }),
     orderedFacets,
     relevantTopics

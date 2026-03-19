@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createTypefullyDraftRequestSchema } from "@/src/lib/typefully";
+import { logRouteError } from "@/src/server/api-error";
 import { markGeneratedDraftOutputSavedToTypefully, markGeneratedDraftOutputTypefullyFailed } from "@/src/server/generated-drafts";
 import { createTypefullyDraft } from "@/src/server/typefully";
 
@@ -24,22 +25,24 @@ export async function POST(request: Request) {
 
       return NextResponse.json(result);
     } catch (error) {
+      const message = logRouteError("typefully/draft.create", request, error, "Unknown Typefully draft error");
       if (body.draftId && body.outputIndex !== null && body.outputIndex !== undefined) {
         markGeneratedDraftOutputTypefullyFailed({
           draftId: body.draftId,
           outputIndex: body.outputIndex,
-          errorMessage: error instanceof Error ? error.message : "Unknown Typefully draft error"
+          errorMessage: message
         });
       }
 
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : "Unknown Typefully draft error" },
+        { error: message },
         { status: 500 }
       );
     }
   } catch (error) {
+    const message = logRouteError("typefully/draft.request", request, error, "Invalid Typefully draft request");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Invalid Typefully draft request" },
+      { error: message },
       { status: 400 }
     );
   }

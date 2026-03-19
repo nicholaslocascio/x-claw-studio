@@ -11,6 +11,12 @@ export interface AnalyzeMissingResult {
   totalMissing: number;
 }
 
+function getUsageTimestampMs(input: { tweet: { createdAt?: string | null; extraction?: { extractedAt?: string | null } } }): number {
+  const timestamp = input.tweet.createdAt ?? input.tweet.extraction?.extractedAt ?? null;
+  const parsed = timestamp ? Date.parse(timestamp) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms < 1000) {
     return `${Math.max(0, Math.round(ms))}ms`;
@@ -29,9 +35,18 @@ function formatDuration(ms: number): string {
 export async function analyzeMissingUsages(): Promise<AnalyzeMissingResult> {
   const startedAt = Date.now();
   const data = getDashboardData();
-  const missing = data.tweetUsages.filter(
-    (usage) => usage.analysis.status !== "complete" && usage.tweet.tweetId
-  );
+  const missing = data.tweetUsages
+    .filter((usage) => usage.analysis.status !== "complete" && usage.tweet.tweetId)
+    .sort((left, right) => {
+      const rightTimestamp = getUsageTimestampMs(right);
+      const leftTimestamp = getUsageTimestampMs(left);
+
+      if (rightTimestamp !== leftTimestamp) {
+        return rightTimestamp - leftTimestamp;
+      }
+
+      return left.usageId.localeCompare(right.usageId);
+    });
 
   console.log(
     `Found ${missing.length} usages missing analysis. interItemDelay=${analysisInterItemDelayMs}ms`

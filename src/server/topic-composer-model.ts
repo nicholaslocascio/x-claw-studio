@@ -7,7 +7,11 @@ import {
   type TopicPostRequest,
   type TopicPostSubject
 } from "@/src/lib/topic-composer";
-import { parseGeminiJsonResponse, runGeminiPrompt } from "@/src/server/gemini-cli-json";
+import {
+  getComposeModelProvider,
+  parseComposeJsonResponse,
+  runComposePromptWithProvider
+} from "@/src/server/compose-model-cli";
 import {
   buildTopicPostCleanupPrompt,
   buildTopicPostPlanPrompt,
@@ -27,6 +31,20 @@ export interface TopicComposerModel {
     plan: TopicPostPlan;
     candidates: ReplyMediaCandidate[];
   }): Promise<TopicPostDraft>;
+}
+
+interface PromptRunnerInput {
+  prompt: string;
+  imagePaths?: string[];
+  label?: string;
+}
+
+function collectTopicImagePaths(candidates: ReplyMediaCandidate[]): string[] {
+  return Array.from(
+    new Set(
+      candidates.flatMap((candidate) => [candidate.localFilePath]).filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    )
+  );
 }
 
 function normalizeStringList(value: unknown, maxItems: number): string[] {
@@ -57,15 +75,21 @@ function normalizeTopicPostPlan(value: unknown): unknown {
   };
 }
 
-export class GeminiCliTopicComposerModel implements TopicComposerModel {
-  providerId = "gemini-cli";
+class BaseTopicComposerModel implements TopicComposerModel {
+  constructor(
+    public providerId: string,
+    private readonly promptRunner: (input: PromptRunnerInput) => Promise<string>
+  ) {}
 
   async planPost(input: {
     request: TopicPostRequest;
     subject: TopicPostSubject;
   }): Promise<TopicPostPlan> {
-    const stdout = await runGeminiPrompt(buildTopicPostPlanPrompt(input));
-    return parseGeminiJsonResponse(stdout, (value) => topicPostPlanSchema.parse(normalizeTopicPostPlan(value)));
+    const stdout = await this.promptRunner({
+      prompt: buildTopicPostPlanPrompt(input),
+      label: "topic-plan"
+    });
+    return parseComposeJsonResponse(stdout, (value) => topicPostPlanSchema.parse(normalizeTopicPostPlan(value)));
   }
 
   async composePost(input: {
@@ -74,17 +98,24 @@ export class GeminiCliTopicComposerModel implements TopicComposerModel {
     plan: TopicPostPlan;
     candidates: ReplyMediaCandidate[];
   }): Promise<TopicPostDraft> {
-    const stdout = await runGeminiPrompt(buildTopicPostPrompt(input));
-    const draft = parseGeminiJsonResponse(stdout, (value) => topicPostDraftSchema.parse(value));
-    const cleanupStdout = await runGeminiPrompt(
-      buildTopicPostCleanupPrompt({
+    const imagePaths = collectTopicImagePaths(input.candidates);
+    const stdout = await this.promptRunner({
+      prompt: buildTopicPostPrompt(input),
+      imagePaths,
+      label: "topic-compose"
+    });
+    const draft = parseComposeJsonResponse(stdout, (value) => topicPostDraftSchema.parse(value));
+    const cleanupStdout = await this.promptRunner({
+      prompt: buildTopicPostCleanupPrompt({
         request: input.request,
         subject: input.subject,
         plan: input.plan,
         draft
-      })
-    );
-    const cleanedDraft = parseGeminiJsonResponse(cleanupStdout, (value) => topicPostDraftSchema.parse(value));
+      }),
+      imagePaths,
+      label: "topic-cleanup"
+    });
+    const cleanedDraft = parseComposeJsonResponse(cleanupStdout, (value) => topicPostDraftSchema.parse(value));
     const maybeNormalized = normalizeDraftStrings({
       ...cleanedDraft,
       selectedCandidateId: draft.selectedCandidateId
@@ -94,15 +125,17 @@ export class GeminiCliTopicComposerModel implements TopicComposerModel {
       return maybeNormalized;
     }
 
-    const finalCleanupStdout = await runGeminiPrompt(
-      buildTopicPostCleanupPrompt({
+    const finalCleanupStdout = await this.promptRunner({
+      prompt: buildTopicPostCleanupPrompt({
         request: input.request,
         subject: input.subject,
         plan: input.plan,
         draft: maybeNormalized
-      })
-    );
-    const finalDraft = parseGeminiJsonResponse(finalCleanupStdout, (value) => topicPostDraftSchema.parse(value));
+      }),
+      imagePaths,
+      label: "topic-final-cleanup"
+    });
+    const finalDraft = parseComposeJsonResponse(finalCleanupStdout, (value) => topicPostDraftSchema.parse(value));
 
     return normalizeDraftStrings({
       ...finalDraft,
@@ -111,6 +144,18 @@ export class GeminiCliTopicComposerModel implements TopicComposerModel {
   }
 }
 
+export class GeminiCliTopicComposerModel extends BaseTopicComposerModel {
+  constructor() {
+    super("gemini-cli", ({ prompt }) => runComposePromptWithProvider("gemini-cli", { prompt }));
+  }
+}
+
+export class CodexExecTopicComposerModel extends BaseTopicComposerModel {
+  constructor() {
+    super("codex-exec", (input) => runComposePromptWithProvider("codex-exec", input));
+  }
+}
+
 export function createTopicComposerModel(): TopicComposerModel {
-  return new GeminiCliTopicComposerModel();
+  return getComposeModelProvider() === "gemini-cli" ? new GeminiCliTopicComposerModel() : new CodexExecTopicComposerModel();
 }

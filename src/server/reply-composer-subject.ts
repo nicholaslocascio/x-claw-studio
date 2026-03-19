@@ -4,90 +4,61 @@ import type {
   ReplyComposerSubject,
   ReplySourceLookupResult
 } from "@/src/lib/reply-composer";
-import { analyzeAndIndexTweetUsage } from "@/src/server/analysis-pipeline";
-import { getDashboardData } from "@/src/server/data";
+import type { TweetUsageRecord } from "@/src/lib/types";
+import { queueMissingUsageAnalysisIfIdle } from "@/src/server/auto-analysis";
+import { getLightweightUsageData } from "@/src/server/data";
 import { findTweetById } from "@/src/server/tweet-repository";
-import { getUsageDetail } from "@/src/server/usage-details";
 import { runXApiCapture } from "@/src/server/x-api-capture";
 import { extractTweetIdFromStatusUrl, normalizeXStatusUrl } from "@/src/lib/x-status-url";
 
-function buildSubjectFromUsageDetail(
-  detail: NonNullable<Awaited<ReturnType<typeof getUsageDetail>>>
+function buildSubjectFromUsage(
+  usage: TweetUsageRecord
 ): ReplyComposerSubject {
   return {
-    usageId: detail.usageId,
-    tweetId: detail.tweet.tweetId,
-    tweetUrl: detail.tweet.tweetUrl,
-    authorUsername: detail.tweet.authorUsername,
-    createdAt: detail.tweet.createdAt,
-    tweetText: detail.tweet.text,
-    mediaKind: detail.analysis.mediaKind,
+    usageId: usage.usageId,
+    tweetId: usage.tweet.tweetId,
+    tweetUrl: usage.tweet.tweetUrl,
+    authorUsername: usage.tweet.authorUsername,
+    createdAt: usage.tweet.createdAt,
+    tweetText: usage.tweet.text,
+    mediaKind: usage.analysis.mediaKind,
+    localFilePath: usage.mediaLocalFilePath,
+    playableFilePath: usage.mediaPlayableFilePath,
     analysis: {
-      captionBrief: detail.analysis.caption_brief,
-      sceneDescription: detail.analysis.scene_description,
-      primaryEmotion: detail.analysis.primary_emotion,
-      conveys: detail.analysis.conveys,
-      userIntent: detail.analysis.user_intent,
-      rhetoricalRole: detail.analysis.rhetorical_role,
-      textMediaRelationship: detail.analysis.text_media_relationship,
-      culturalReference: detail.analysis.cultural_reference,
-      analogyTarget: detail.analysis.analogy_target,
-      searchKeywords: detail.analysis.search_keywords
+      captionBrief: usage.analysis.caption_brief,
+      sceneDescription: usage.analysis.scene_description,
+      primaryEmotion: usage.analysis.primary_emotion,
+      conveys: usage.analysis.conveys,
+      userIntent: usage.analysis.user_intent,
+      rhetoricalRole: usage.analysis.rhetorical_role,
+      textMediaRelationship: usage.analysis.text_media_relationship,
+      culturalReference: usage.analysis.cultural_reference,
+      analogyTarget: usage.analysis.analogy_target,
+      searchKeywords: usage.analysis.search_keywords
     }
   };
 }
 
 function findFirstUsageForRequest(request: Pick<ReplyCompositionRequest, "usageId" | "tweetId">) {
-  const data = getDashboardData();
+  const usages = getLightweightUsageData();
   if (request.usageId) {
-    return data.tweetUsages.find((usage) => usage.usageId === request.usageId) ?? null;
+    return usages.find((usage) => usage.usageId === request.usageId) ?? null;
   }
 
   if (request.tweetId) {
-    return data.tweetUsages.find((usage) => usage.tweet.tweetId === request.tweetId && usage.mediaIndex === 0) ?? null;
+    return usages.find((usage) => usage.tweet.tweetId === request.tweetId && usage.mediaIndex === 0) ?? null;
   }
 
   return null;
 }
 
-export async function resolveReplyComposerSubject(
-  request: ReplyCompositionRequest,
-  options?: {
-    onProgress?: (event: ReplyCompositionProgressEvent) => void;
-    progressGoal?: ReplyCompositionRequest["goal"] | null;
-  }
-): Promise<ReplyComposerSubject> {
-  const dashboardUsage = findFirstUsageForRequest(request);
+function resolveUsageSubject(
+  usage: TweetUsageRecord
+): ReplyComposerSubject | null {
+  return buildSubjectFromUsage(usage);
+}
 
-  if (dashboardUsage && dashboardUsage.analysis.status !== "complete" && dashboardUsage.tweet.tweetId) {
-    options?.onProgress?.({
-      stage: "analyzing",
-      message: "Analyzing source tweet media before composing the reply",
-      detail: dashboardUsage.usageId,
-      goal: options?.progressGoal ?? request.goal
-    });
-    await analyzeAndIndexTweetUsage(dashboardUsage.tweet.tweetId, dashboardUsage.mediaIndex);
-  }
-
-  if (dashboardUsage?.usageId) {
-    const detail = await getUsageDetail(dashboardUsage.usageId);
-    if (!detail) {
-      throw new Error(`Usage ${dashboardUsage.usageId} was not found`);
-    }
-
-    return buildSubjectFromUsageDetail(detail);
-  }
-
-  const tweetId = request.tweetId;
-  if (!tweetId) {
-    throw new Error("Reply composition requires either usageId or tweetId");
-  }
-
-  const tweet = findTweetById(tweetId);
-  if (!tweet) {
-    throw new Error(`Tweet ${tweetId} was not found`);
-  }
-
+function buildSubjectFromTweetOnly(tweet: NonNullable<ReturnType<typeof findTweetById>>): ReplyComposerSubject {
   return {
     usageId: null,
     tweetId: tweet.tweetId,
@@ -96,6 +67,8 @@ export async function resolveReplyComposerSubject(
     createdAt: tweet.createdAt,
     tweetText: tweet.text,
     mediaKind: tweet.media[0]?.mediaKind ?? "none",
+    localFilePath: null,
+    playableFilePath: null,
     analysis: {
       captionBrief: null,
       sceneDescription: null,
@@ -109,6 +82,55 @@ export async function resolveReplyComposerSubject(
       searchKeywords: []
     }
   };
+}
+
+function getReplySourceAnalysisStatus(
+  subject: ReplyComposerSubject,
+  analysisStatus: TweetUsageRecord["analysis"]["status"] | null
+): ReplySourceLookupResult["analysisStatus"] {
+  if (analysisStatus === "complete") {
+    return "complete";
+  }
+
+  return subject.mediaKind === "none" ? "not_applicable" : "pending";
+}
+
+export async function resolveReplyComposerSubject(
+  request: ReplyCompositionRequest,
+  options?: {
+    onProgress?: (event: ReplyCompositionProgressEvent) => void;
+    progressGoal?: ReplyCompositionRequest["goal"] | null;
+  }
+): Promise<ReplyComposerSubject> {
+  const dashboardUsage = findFirstUsageForRequest(request);
+
+  if (dashboardUsage?.usageId) {
+    const hydratedSubject = resolveUsageSubject(dashboardUsage);
+    if (hydratedSubject) {
+      if (dashboardUsage.analysis.status !== "complete" && dashboardUsage.tweet.tweetId) {
+        queueMissingUsageAnalysisIfIdle(`reply composer for ${dashboardUsage.usageId}`);
+        options?.onProgress?.({
+          stage: "starting",
+          message: "Loaded the tweet. Media analysis is still catching up in the background",
+          detail: dashboardUsage.usageId,
+          goal: options?.progressGoal ?? request.goal
+        });
+      }
+      return hydratedSubject;
+    }
+  }
+
+  const tweetId = request.tweetId;
+  if (!tweetId) {
+    throw new Error("Reply composition requires either usageId or tweetId");
+  }
+
+  const tweet = findTweetById(tweetId);
+  if (!tweet) {
+    throw new Error(`Tweet ${tweetId} was not found`);
+  }
+
+  return buildSubjectFromTweetOnly(tweet);
 }
 
 export async function resolveReplySourceFromUrl(input: {
@@ -130,23 +152,24 @@ export async function resolveReplySourceFromUrl(input: {
   if (!existingTweet) {
     await runXApiCapture({
       mode: "tweet_lookup",
-      tweetUrl: normalizedUrl
+      tweetUrl: normalizedUrl,
+      postProcessMode: "deferred"
     });
   }
 
+  const usage = findFirstUsageForRequest({ tweetId });
   const subject = await resolveReplyComposerSubject({
     tweetId,
     goal: "insight",
     mode: "single"
   });
-  const usage = findFirstUsageForRequest({ tweetId });
 
   return {
     normalizedUrl,
     tweetId,
-    usageId: usage?.usageId ?? subject.usageId ?? null,
+    usageId: subject.usageId ?? null,
     source,
-    analysisStatus: usage ? "complete" : "not_applicable",
+    analysisStatus: getReplySourceAnalysisStatus(subject, usage?.analysis.status ?? null),
     subject
   };
 }

@@ -4,7 +4,9 @@ import { resolveMediaDisplayUrl } from "@/src/lib/media-display";
 import { getUsageDetail } from "@/src/server/usage-details";
 import { createMediaPostComposerModel } from "@/src/server/media-post-composer-model";
 import { CliFacetReplyMediaSearchProvider } from "@/src/server/reply-media-search";
+import { getCurrentComposeRunLog } from "@/src/server/compose-run-log";
 import { recordAssetWishlist } from "@/src/server/reply-media-wishlist";
+import { createPerfTrace } from "@/src/server/perf-log";
 
 async function buildMediaPostSubject(usageId: string): Promise<MediaPostSubject> {
   const detail = await getUsageDetail(usageId);
@@ -74,6 +76,11 @@ function buildCurrentAssetCandidate(subject: MediaPostSubject): ReplyMediaCandid
     videoFilePath: subject.playableFilePath,
     mediaKind: subject.mediaKind,
     combinedScore: 1,
+    rankingScore: 1,
+    assetStarred: false,
+    assetUsageCount: subject.priorUsages.length + 1,
+    duplicateGroupUsageCount: subject.priorUsages.length + 1,
+    hotnessScore: null,
     matchReason: "current media asset",
     sourceType: "usage_facet",
     sourceLabel: subject.tweetText,
@@ -96,6 +103,9 @@ export async function composeTweetFromMediaAsset(
     onProgress?: (event: MediaPostProgressEvent) => void;
   }
 ): Promise<MediaPostResult> {
+  const perf = createPerfTrace("compose:media-post", {
+    usageId: request.usageId
+  });
   options?.onProgress?.({
     stage: "starting",
     message: "Loading media asset context",
@@ -103,15 +113,28 @@ export async function composeTweetFromMediaAsset(
   });
 
   const subject = await buildMediaPostSubject(request.usageId);
+  perf.mark("subject_ready", {
+    assetId: subject.assetId ?? null,
+    priorUsageCount: subject.priorUsages.length
+  });
   const model = createMediaPostComposerModel();
-  const search = new CliFacetReplyMediaSearchProvider();
+  const search = new CliFacetReplyMediaSearchProvider({ scope: "media-post" });
+  const logger = getCurrentComposeRunLog();
+  logger?.writeJsonArtifact("media-post-subject", {
+    request,
+    subject
+  });
 
   options?.onProgress?.({
     stage: "planning",
-    message: "Planning tweet angle from the asset",
+    message: "Agent is planning the tweet angle from the asset",
     detail: subject.assetId ?? subject.usageId
   });
   const plan = await model.planPost({ request, subject });
+  perf.mark("plan_ready", {
+    queryCount: plan.searchQueries.length
+  });
+  logger?.writeJsonArtifact("media-post-plan", plan);
 
   options?.onProgress?.({
     stage: "searching",
@@ -119,6 +142,10 @@ export async function composeTweetFromMediaAsset(
     detail: plan.searchQueries.join(" | ")
   });
   const searchResult = await search.searchMany(plan.searchQueries);
+  perf.mark("search_ready", {
+    candidateCount: searchResult.candidates.length,
+    warning: searchResult.warning ?? null
+  });
   const currentAssetCandidate = buildCurrentAssetCandidate(subject);
   const allCandidates = [
     currentAssetCandidate,
@@ -127,7 +154,7 @@ export async function composeTweetFromMediaAsset(
 
   options?.onProgress?.({
     stage: "composing",
-    message: "Writing tweet and choosing the best media",
+    message: "Agent is writing the tweet and choosing the best media",
     detail: `${allCandidates.length} candidates`
   });
   const draft = await model.composePost({
@@ -136,6 +163,11 @@ export async function composeTweetFromMediaAsset(
     plan,
     candidates: allCandidates
   });
+  perf.mark("draft_ready", {
+    selectedCandidateId: draft.selectedCandidateId ?? null,
+    candidateCount: allCandidates.length
+  });
+  logger?.writeJsonArtifact("media-post-draft", draft);
 
   const selectedMedia = allCandidates.find((candidate) => candidate.candidateId === draft.selectedCandidateId) ?? null;
   const alternativeMedia = allCandidates
@@ -166,7 +198,7 @@ export async function composeTweetFromMediaAsset(
     detail: selectedMedia ? "media selected" : "current asset kept"
   });
 
-  return {
+  const result = {
     provider: model.providerId,
     request,
     subject,
@@ -187,4 +219,10 @@ export async function composeTweetFromMediaAsset(
     selectedMedia,
     alternativeMedia
   };
+  logger?.writeJsonArtifact("media-post-result", result);
+  perf.end({
+    selectedMedia: Boolean(selectedMedia),
+    wishlistSavedCount: wishlistEntries.length
+  });
+  return result;
 }

@@ -16,11 +16,11 @@ export type TypefullySocialSet = z.infer<typeof typefullySocialSetSchema>;
 
 export const createTypefullyDraftRequestSchema = z.object({
   mode: typefullyDraftModeSchema.default("reply"),
-  text: z.string().trim().min(1).max(280),
+  text: z.string().trim().min(1),
   mediaFilePath: z.string().trim().min(1).optional().nullable(),
   replyToTweetUrl: z.string().trim().min(1).optional().nullable(),
   socialSetId: z.coerce.number().int().min(1).optional().nullable(),
-  draftTitle: z.string().trim().max(512).optional().nullable(),
+  draftTitle: z.string().trim().optional().nullable(),
   scratchpadText: z.string().trim().optional().nullable(),
   draftId: z.string().trim().min(1).optional().nullable(),
   outputIndex: z.coerce.number().int().min(0).optional().nullable()

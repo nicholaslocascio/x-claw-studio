@@ -23,7 +23,7 @@ function formatDate(value: string | null | undefined): string {
 
 function renderValue(value: UsageAnalysis[keyof UsageAnalysis]) {
   if (Array.isArray(value)) {
-    return value.length > 0 ? value.join(", ") : "Pending";
+    return value.length > 0 ? value.join(", ") : "Not analyzed yet";
   }
 
   if (typeof value === "boolean") {
@@ -31,7 +31,7 @@ function renderValue(value: UsageAnalysis[keyof UsageAnalysis]) {
   }
 
   if (value === null) {
-    return "Pending";
+    return "Not analyzed yet";
   }
 
   return String(value);
@@ -288,6 +288,41 @@ export function AnalysisDetail(props: {
   });
   const duplicateCount = unifiedMatches.length;
   const relevantTopics = props.relevantTopics.slice(0, 6);
+  const facetMap = new Map(props.orderedFacets.map((facet) => [facet.name, facet.value]));
+  const summarySections = [
+    {
+      title: "What it shows",
+      items: [
+        { label: "Scene", value: facetMap.get("scene_description") },
+        { label: "Caption", value: facetMap.get("caption_brief") },
+        { label: "Primary emotion", value: facetMap.get("primary_emotion") }
+      ]
+    },
+    {
+      title: "Intent",
+      items: [
+        { label: "What it conveys", value: facetMap.get("conveys") },
+        { label: "User intent", value: facetMap.get("user_intent") },
+        { label: "Role", value: facetMap.get("rhetorical_role") }
+      ]
+    },
+    {
+      title: "Why it works",
+      items: [
+        { label: "Text and media", value: facetMap.get("text_media_relationship") },
+        { label: "Why it works", value: facetMap.get("why_it_works") },
+        { label: "Audience takeaway", value: facetMap.get("audience_takeaway") }
+      ]
+    },
+    {
+      title: "References",
+      items: [
+        { label: "Metaphor", value: facetMap.get("metaphor") },
+        { label: "Cultural reference", value: facetMap.get("cultural_reference") },
+        { label: "Analogy target", value: facetMap.get("analogy_target") }
+      ]
+    }
+  ];
 
   return (
     <main className="app-shell">
@@ -297,7 +332,7 @@ export function AnalysisDetail(props: {
       <section className="relative z-10 mb-8 terminal-window">
         <div className="window-bar">
           <div>
-            <div className="section-kicker">Usage Detail</div>
+            <div className="section-kicker">Media detail</div>
             <div className="mt-2 font-[family:var(--font-mono)] text-xs uppercase tracking-[0.22em] text-muted">
               &gt; {props.usageId}
             </div>
@@ -315,8 +350,8 @@ export function AnalysisDetail(props: {
               mediaIndex={props.mediaIndex}
               className="tt-button"
             />
-            <Link href="/" className="tt-link">
-              <span>Back</span>
+            <Link href="/queue" className="tt-link">
+              <span>Back to review</span>
             </Link>
           </div>
           <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
@@ -339,9 +374,19 @@ export function AnalysisDetail(props: {
                 <p className="text-sm leading-7 text-slate-200">{props.tweet.text ?? "No tweet text"}</p>
               </div>
               {tweetUrl ? (
-                <a href={tweetUrl} target="_blank" rel="noreferrer" className="tt-link">
-                  <span>Open tweet</span>
-                </a>
+                <div className="flex flex-wrap gap-2">
+                  <a href={tweetUrl} target="_blank" rel="noreferrer" className="tt-link">
+                    <span>Open tweet</span>
+                  </a>
+                  <Link href={`/replies?url=${encodeURIComponent(tweetUrl)}`} className="tt-link">
+                    <span>Draft reply</span>
+                  </Link>
+                  {props.tweetId ? (
+                    <Link href={`/clone?tweetId=${encodeURIComponent(props.tweetId)}`} className="tt-link">
+                      <span>Rewrite this tweet</span>
+                    </Link>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
@@ -359,6 +404,8 @@ export function AnalysisDetail(props: {
           createdAt: props.tweet.createdAt,
           tweetText: props.tweet.text,
           mediaKind: props.media.mediaKind,
+          localFilePath: props.mediaAssetView?.asset.canonicalFilePath ?? null,
+          playableFilePath: props.mediaAssetView?.asset.promotedVideoFilePath ?? null,
           analysis: {
             captionBrief: props.orderedFacets.find((facet) => facet.name === "caption_brief")?.value as string | null,
             sceneDescription: props.orderedFacets.find((facet) => facet.name === "scene_description")?.value as string | null,
@@ -400,7 +447,7 @@ export function AnalysisDetail(props: {
           <div className="panel-body">
             <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
               <div>
-                <div className="section-kicker">Relevant Topics</div>
+                <div className="section-kicker">Topic links</div>
                 <h2 className="section-title mt-3">How this media maps onto live discourse</h2>
               </div>
               <Link href="/topics" className="tt-link">
@@ -421,7 +468,7 @@ export function AnalysisDetail(props: {
                   </div>
                   <div className="space-y-3 text-sm leading-7 text-slate-200">
                     {topic.analysis.whyNow ? <p>{topic.analysis.whyNow}</p> : null}
-                    {topic.analysis.newsPeg ? <p className="text-muted">News peg: {topic.analysis.newsPeg}</p> : null}
+                    {topic.analysis.newsPeg ? <p className="text-muted">News context: {topic.analysis.newsPeg}</p> : null}
                     <p>{topic.tweet.text ?? "No tweet text"}</p>
                     <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.14em] text-cyan">
                       {topic.analysis.targetEntity ? <span>target {topic.analysis.targetEntity}</span> : null}
@@ -444,6 +491,30 @@ export function AnalysisDetail(props: {
           </div>
         </section>
       ) : null}
+
+      <section className="relative z-10 mb-8 terminal-panel">
+        <div className="panel-body">
+          <div className="mb-5">
+            <div className="section-kicker">Summary</div>
+            <h2 className="section-title mt-3">The clearest read on this media</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {summarySections.map((section) => (
+              <article key={section.title} className="tt-subpanel">
+                <div className="tt-data-label">{section.title}</div>
+                <div className="mt-3 space-y-3">
+                  {section.items.map((item) => (
+                    <div key={item.label}>
+                      <div className="text-xs uppercase tracking-[0.14em] text-slate-400">{item.label}</div>
+                      <div className="mt-1 text-sm leading-7 text-slate-200">{renderValue(item.value as UsageAnalysis[keyof UsageAnalysis])}</div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <section className="relative z-10 mb-8 terminal-panel">
         <div className="panel-body">
@@ -506,7 +577,7 @@ export function AnalysisDetail(props: {
       <section className="relative z-10 mb-8 terminal-panel">
         <div className="panel-body">
           <div className="mb-5">
-            <div className="section-kicker">Full Analysis</div>
+            <div className="section-kicker">Analysis</div>
             <h2 className="section-title mt-3">All facets</h2>
           </div>
           <details className="tt-subpanel-soft">
@@ -532,7 +603,7 @@ export function AnalysisDetail(props: {
           <div className="panel-body">
             <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
               <div>
-                <div className="section-kicker">Media Asset View</div>
+            <div className="section-kicker">Related media</div>
                 <h2 className="mt-3 break-all font-[family:var(--font-heading)] text-3xl font-black uppercase tracking-[0.14em] text-cyan">
                   {props.mediaAssetView.asset.assetId}
                 </h2>
@@ -542,7 +613,7 @@ export function AnalysisDetail(props: {
                 <span className={`tt-chip ${props.mediaAssetView.asset.starred ? "tt-chip-accent" : ""}`}>
                   {props.mediaAssetView.asset.starred ? "starred" : "not starred"}
                 </span>
-                <span className={`tt-chip ${duplicateCount > 0 ? "tt-chip-accent" : ""}`}>duplicates {duplicateCount}</span>
+                <span className={`tt-chip ${duplicateCount > 0 ? "tt-chip-accent" : ""}`}>repeated {duplicateCount}</span>
                 <span className={`tt-chip ${unifiedMatches.length > 0 ? "tt-chip-accent" : ""}`}>matches {unifiedMatches.length}</span>
                 <span className="tt-chip">{props.mediaAssetView.summary?.status ?? "unsummarized"}</span>
               </div>
@@ -616,7 +687,7 @@ export function AnalysisDetail(props: {
                           {match.assetId}
                         </span>,
                         <span key="similarity" className="tt-chip">
-                          {match.relationship === "exact" ? "same asset" : `cosine ${match.similarityScore.toFixed(3)}`}
+                          {match.relationship === "exact" ? "same asset" : `similarity ${match.similarityScore.toFixed(3)}`}
                         </span>,
                         ...(match.distance !== null
                           ? [
@@ -643,8 +714,8 @@ export function AnalysisDetail(props: {
             {props.mediaAssetView.nearestNeighbors.length > 0 ? (
               <div>
                 <div className="mb-4">
-                  <div className="section-kicker">Nearest Neighbors</div>
-                  <h2 className="section-title mt-3">Top 10 closest assets, even below threshold</h2>
+                  <div className="section-kicker">Nearest neighbors</div>
+                  <h2 className="section-title mt-3">Closest assets, even below the match threshold</h2>
                 </div>
                 <div className="grid gap-4 lg:grid-cols-2">
                   {props.mediaAssetView.nearestNeighbors.map((match) => {
@@ -671,7 +742,7 @@ export function AnalysisDetail(props: {
                             {match.asset.assetId}
                           </span>,
                           <span key="similarity" className="tt-chip">
-                            cosine {match.similarityScore.toFixed(3)}
+                            similarity {match.similarityScore.toFixed(3)}
                           </span>,
                           ...(match.distance !== null
                             ? [

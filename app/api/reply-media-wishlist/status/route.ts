@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { setReplyMediaWishlistStatus } from "@/src/server/reply-media-wishlist";
+import { logRouteError } from "@/src/server/api-error";
 
 const requestSchema = z.object({
   key: z.string().min(1),
@@ -18,8 +19,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ key: updated.key, status: updated.status });
   } catch (error) {
+    const message = logRouteError("reply-media-wishlist/status", request, error, "Unknown wishlist status error");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown wishlist status error" },
+      { error: message },
       { status: 500 }
     );
   }

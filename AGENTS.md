@@ -50,6 +50,22 @@ This repo is not database-backed in the current runtime path. The app reads from
 ## Quality Bar
 
 - A local skill exists at [`/.agents/skills/stop-slop/SKILL.md`](/Users/nicklocascio/Projects/twitter-trend/.agents/skills/stop-slop/SKILL.md). Use its rules as a required pre-submit pass whenever you draft, edit, or review prose in this repo.
+- A local gstack install exists at [`/skills/gstack`](/Users/nicklocascio/Projects/twitter-trend/skills/gstack). Use the `/browse` skill from gstack for all web browsing in this repo.
+- Never use `mcp__claude-in-chrome__*` tools in this repo.
+- Available gstack skills:
+  - `/plan-ceo-review`
+  - `/plan-eng-review`
+  - `/plan-design-review`
+  - `/review`
+  - `/ship`
+  - `/browse`
+  - `/qa`
+  - `/qa-only`
+  - `/qa-design-review`
+  - `/setup-browser-cookies`
+  - `/retro`
+  - `/document-release`
+- If gstack skills are not working, run `cd skills/gstack && ./setup` to build the binary and register the skills again.
 - When you call `gemini` in this repo, tell it to load that skill file directly so the anti-slop pass happens inside the headless run too.
 - Before submitting, run the `stop-slop` pass over UI copy, prompts, docs, and final explanations:
   - cut filler phrases and throat-clearing

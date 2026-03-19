@@ -168,6 +168,7 @@ export function extractTweetsFromHtml(
       sourceName,
       tweetId: statusMatch?.[2] ?? null,
       tweetUrl: getPreferredXStatusUrl(statusHref ? `https://x.com${statusHref}` : null),
+      authorUserId: null,
       authorHandle: handle,
       authorUsername: statusMatch?.[1] ? `@${statusMatch[1]}` : handle,
       authorDisplayName: displayName,

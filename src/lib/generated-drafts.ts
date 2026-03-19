@@ -1,4 +1,4 @@
-export type GeneratedDraftKind = "reply" | "topic_post" | "media_post";
+export type GeneratedDraftKind = "reply" | "topic_post" | "media_post" | "manual_post" | "clone_tweet";
 export type GeneratedDraftStatus = "running" | "complete" | "failed";
 
 export interface GeneratedDraftMediaCandidateRecord {
@@ -12,9 +12,15 @@ export interface GeneratedDraftMediaCandidateRecord {
   displayUrl: string | null;
   localFilePath: string | null;
   videoFilePath: string | null;
-  sourceType: "usage_facet" | "meme_template";
+  sourceType: "usage_facet" | "meme_template" | "source_tweet";
   sourceLabel: string | null;
   combinedScore: number;
+  rankingScore?: number | null;
+  matchReason?: string | null;
+  assetStarred?: boolean;
+  assetUsageCount?: number | null;
+  duplicateGroupUsageCount?: number | null;
+  hotnessScore?: number | null;
   sceneDescription: string | null;
   primaryEmotion: string | null;
   conveys: string | null;
@@ -27,7 +33,7 @@ export interface GeneratedDraftOutputRecord {
   mediaSelectionReason: string | null;
   postingNotes: string | null;
   selectedMediaLabel: string | null;
-  selectedMediaSourceType: "usage_facet" | "meme_template" | null;
+  selectedMediaSourceType: "usage_facet" | "meme_template" | "source_tweet" | null;
   selectedMediaCandidateId?: string | null;
   selectedMediaUsageId?: string | null;
   selectedMediaAssetId?: string | null;
@@ -36,6 +42,13 @@ export interface GeneratedDraftOutputRecord {
   selectedMediaDisplayUrl?: string | null;
   selectedMediaLocalFilePath?: string | null;
   selectedMediaVideoFilePath?: string | null;
+  selectedMediaCombinedScore?: number | null;
+  selectedMediaRankingScore?: number | null;
+  selectedMediaMatchReason?: string | null;
+  selectedMediaAssetStarred?: boolean;
+  selectedMediaAssetUsageCount?: number | null;
+  selectedMediaDuplicateGroupUsageCount?: number | null;
+  selectedMediaHotnessScore?: number | null;
   alternativeMedia?: GeneratedDraftMediaCandidateRecord[];
   postedToXAt?: string | null;
   postedToXUrl?: string | null;
@@ -54,6 +67,8 @@ export interface GeneratedDraftRecord {
   status: GeneratedDraftStatus;
   createdAt: string;
   updatedAt: string;
+  composeRunId: string | null;
+  composeRunLogDir: string | null;
   usageId: string | null;
   tweetId: string | null;
   topicId: string | null;

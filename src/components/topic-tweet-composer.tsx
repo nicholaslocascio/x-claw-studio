@@ -1,12 +1,23 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import {
+  applyDraftRefToLeadingRunningDraft,
+  applyProgressToLeadingRunningDraft,
+  buildLocalRunningDraft,
+  fetchGeneratedDraftHistory,
+  markLeadingRunningDraftFailed,
+  prependLocalRunningDraft
+} from "@/src/components/compose-client";
+import { ComposeRunReference } from "@/src/components/compose-run-reference";
 import { MediaPreview } from "@/src/components/media-preview";
 import { PostToXButton } from "@/src/components/post-to-x-button";
 import { ReplyComposer } from "@/src/components/reply-composer";
 import type { GeneratedDraftRecord } from "@/src/lib/generated-drafts";
 import { readNdjsonStream } from "@/src/lib/ndjson-stream";
 import type { GroundedTopicNews, TopicClusterRecord } from "@/src/lib/types";
+import { getPreferredXStatusUrl } from "@/src/lib/x-status-url";
 import type {
   TopicPostBatchResult,
   TopicPostGoal,
@@ -91,18 +102,13 @@ export function TopicTweetComposer(props: {
   const queuedGoals = latestProgress?.queuedGoals ?? Math.max(0, totalGoals - completedGoals - runningGoals);
 
   async function loadDraftHistory(): Promise<void> {
-    const params = new URLSearchParams({
-      kind: "topic_post",
-      topicId: topicId ?? "",
-      limit: "12"
-    });
-    const response = await fetch(`/api/generated-drafts?${params.toString()}`);
-    if (!response.ok) {
-      return;
-    }
-
-    const body = await response.json();
-    setDraftHistory(body.drafts ?? []);
+    setDraftHistory(
+      await fetchGeneratedDraftHistory({
+        kind: "topic_post",
+        topicId: topicId ?? "",
+        limit: 12
+      })
+    );
   }
 
   async function compose(mode: TopicPostMode): Promise<void> {
@@ -111,27 +117,18 @@ export function TopicTweetComposer(props: {
     setResults([]);
     setProgressEvents([]);
     setRunMode(mode);
-    setDraftHistory((current) => [
-      {
-        draftId: `local-running-${Date.now()}`,
-        kind: "topic_post",
-        status: "running",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        usageId: null,
-        tweetId: null,
-        topicId: topicId ?? null,
-        assetId: null,
-        requestGoal: goal,
-        requestMode: mode,
-        progressStage: "starting",
-        progressMessage: "Starting topic composition",
-        progressDetail: null,
-        errorMessage: null,
-        outputs: []
-      },
-      ...current.filter((item) => !item.draftId.startsWith("local-running-"))
-    ]);
+    setDraftHistory((current) =>
+      prependLocalRunningDraft(
+        current,
+        buildLocalRunningDraft({
+          kind: "topic_post",
+          topicId: topicId ?? null,
+          requestGoal: goal,
+          requestMode: mode,
+          progressMessage: "Starting topic composition"
+        })
+      )
+    );
 
     const response = await fetch("/api/topics/compose", {
       method: "POST",
@@ -151,18 +148,7 @@ export function TopicTweetComposer(props: {
       const body = await response.json();
       const message = body.error || "Topic composition failed";
       setErrorMessage(message);
-      setDraftHistory((current) =>
-        current.map((item, index) =>
-          index === 0 && item.draftId.startsWith("local-running-")
-            ? {
-                ...item,
-                status: "failed",
-                updatedAt: new Date().toISOString(),
-                errorMessage: message
-              }
-            : item
-        )
-      );
+      setDraftHistory((current) => markLeadingRunningDraftFailed(current, message));
       setIsRunning(false);
       await loadDraftHistory();
       return;
@@ -170,26 +156,19 @@ export function TopicTweetComposer(props: {
 
     try {
       await readNdjsonStream<
+        | { type: "draft"; draft: { draftId: string; composeRunId: string; composeRunLogDir: string } }
         | ({ type: "progress" } & TopicPostProgressEvent)
         | { type: "result"; result: TopicPostResult | TopicPostBatchResult }
         | { type: "error"; error: string }
       >(response, (event) => {
+        if (event.type === "draft") {
+          setDraftHistory((current) => applyDraftRefToLeadingRunningDraft(current, event.draft));
+          return;
+        }
+
         if (event.type === "progress") {
           setProgressEvents((current) => [...current, event]);
-          setDraftHistory((current) =>
-            current.map((item, index) =>
-              index === 0 && item.draftId.startsWith("local-running-")
-                ? {
-                    ...item,
-                    updatedAt: new Date().toISOString(),
-                    progressStage: event.stage,
-                    progressMessage: event.message,
-                    progressDetail: event.detail ?? null,
-                    requestGoal: event.goal ?? item.requestGoal
-                  }
-                : item
-            )
-          );
+          setDraftHistory((current) => applyProgressToLeadingRunningDraft(current, event));
           return;
         }
 
@@ -204,35 +183,13 @@ export function TopicTweetComposer(props: {
 
         if (event.type === "error") {
           setErrorMessage(event.error);
-          setDraftHistory((current) =>
-            current.map((item, index) =>
-              index === 0 && item.draftId.startsWith("local-running-")
-                ? {
-                    ...item,
-                    status: "failed",
-                    updatedAt: new Date().toISOString(),
-                    errorMessage: event.error
-                  }
-                : item
-            )
-          );
+          setDraftHistory((current) => markLeadingRunningDraftFailed(current, event.error));
         }
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Topic composition stream was unavailable";
       setErrorMessage(message);
-      setDraftHistory((current) =>
-        current.map((item, index) =>
-          index === 0 && item.draftId.startsWith("local-running-")
-            ? {
-                ...item,
-                status: "failed",
-                updatedAt: new Date().toISOString(),
-                errorMessage: message
-              }
-            : item
-        )
-      );
+      setDraftHistory((current) => markLeadingRunningDraftFailed(current, message));
     }
 
     await loadDraftHistory();
@@ -305,8 +262,8 @@ export function TopicTweetComposer(props: {
       <div className="panel-body">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="section-kicker">Topic Composer</div>
-            <h2 className="section-title mt-3">Draft a new tweet from a topic and pair it with local media</h2>
+            <div className="section-kicker">Topic composer</div>
+            <h2 className="section-title mt-3">Turn a topic into a post or reply</h2>
           </div>
           {selectedTopic ? <div className="tt-chip tt-chip-accent">{selectedTopic.label}</div> : null}
         </div>
@@ -314,7 +271,7 @@ export function TopicTweetComposer(props: {
         <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
           <div className="terminal-window">
             <div className="window-bar">
-              <div className="section-kicker">Compose Brief</div>
+              <div className="section-kicker">Compose brief</div>
               <div className="window-dots">
                 <span className="window-dot bg-orange" />
                 <span className="window-dot bg-accent" />
@@ -334,7 +291,7 @@ export function TopicTweetComposer(props: {
               </label>
 
               <label className="tt-field">
-                <span className="tt-field-label">Compose Mode</span>
+                <span className="tt-field-label">Compose mode</span>
                 <select
                   value={composeMode}
                   onChange={(event) => setComposeMode(event.target.value as TopicComposeMode)}
@@ -347,7 +304,7 @@ export function TopicTweetComposer(props: {
 
               {composeMode === "reply_to_example" ? (
                 <label className="tt-field">
-                  <span className="tt-field-label">Example Tweet</span>
+                  <span className="tt-field-label">Example tweet</span>
                   <select
                     value={selectedReplyTweet?.tweetId ?? ""}
                     onChange={(event) => setSelectedReplyTweetId(event.target.value)}
@@ -370,7 +327,7 @@ export function TopicTweetComposer(props: {
               {composeMode === "new_post" ? (
                 <>
               <label className="tt-field">
-                <span className="tt-field-label">Response Type</span>
+                <span className="tt-field-label">Post angle</span>
                 <select value={goal} onChange={(event) => setGoal(event.target.value as TopicPostGoal)} className="tt-select">
                   {GOAL_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -381,12 +338,12 @@ export function TopicTweetComposer(props: {
               </label>
 
               <label className="tt-field">
-                <span className="tt-field-label">Tone Hint</span>
+                <span className="tt-field-label">Tone</span>
                 <input value={toneHint} onChange={(event) => setToneHint(event.target.value)} className="tt-input" />
               </label>
 
               <label className="tt-field">
-                <span className="tt-field-label">Angle Hint</span>
+                <span className="tt-field-label">Angle</span>
                 <textarea
                   value={angleHint}
                   onChange={(event) => setAngleHint(event.target.value)}
@@ -402,7 +359,7 @@ export function TopicTweetComposer(props: {
               </label>
 
               <label className="tt-field">
-                <span className="tt-field-label">All-Types Concurrency</span>
+                <span className="tt-field-label">All-types concurrency</span>
                 <input
                   type="number"
                   min={1}
@@ -426,18 +383,18 @@ export function TopicTweetComposer(props: {
               <div className="tt-subpanel-soft">
                 <p className="tt-copy">
                   {composeMode === "new_post"
-                    ? "The server plans a topic angle, searches the local media corpus, then drafts one or several tweet and media pairings so you can compare directions. `Draft all types` loads the topic once, then fans out across goals up to this concurrency cap."
-                    : "Pick one of the topic's representative tweets and reuse the existing reply composer directly from this view."}
+                    ? "Pick a topic, shape the angle, and let the app draft one or several post directions with matching media."
+                    : "Pick one of the topic's representative tweets and draft a reply directly from this view."}
                 </p>
               </div>
 
               {composeMode === "new_post" ? (
                 <div className="flex flex-wrap items-center gap-3">
                   <button className="tt-button" onClick={() => void compose("single")} disabled={isRunning || !topicId}>
-                    <span>{isRunning && runMode === "single" ? "Composing..." : "Draft tweet"}</span>
+                    <span>{isRunning && runMode === "single" ? "Composing..." : "Draft post"}</span>
                   </button>
                   <button className="tt-button" onClick={() => void compose("all_goals")} disabled={isRunning || !topicId}>
-                    <span>{isRunning && runMode === "all_goals" ? "Composing all..." : "Draft all types"}</span>
+                    <span>{isRunning && runMode === "all_goals" ? "Composing all..." : "Draft all angles"}</span>
                   </button>
                   {latestProgress ? <span className="tt-chip tt-chip-accent">{latestProgress.message}</span> : null}
                   {errorMessage ? <span className="tt-chip tt-chip-danger">{errorMessage}</span> : null}
@@ -480,17 +437,46 @@ export function TopicTweetComposer(props: {
                     <div className="mt-2 space-y-2">
                       {selectedTopic.representativeTweets.slice(0, 2).map((tweet) => (
                         <div key={tweet.tweetKey} className="text-sm leading-6 text-slate-200">
+                          {(() => {
+                            const replyBuilderUrl =
+                              tweet.authorUsername && tweet.tweetId
+                                ? `https://x.com/${tweet.authorUsername}/status/${tweet.tweetId}`
+                                : null;
+
+                            return (
+                              <>
                           <div className="text-xs uppercase tracking-[0.12em] text-cyan">
                             @{tweet.authorUsername ?? "unknown"} · {formatDate(tweet.createdAt)}
                           </div>
                           <p className="mt-1">{tweet.text ?? "No tweet text"}</p>
+                          {replyBuilderUrl ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <a
+                                href={getPreferredXStatusUrl(replyBuilderUrl) as string}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="tt-link"
+                              >
+                                <span>Open on X</span>
+                              </a>
+                              <Link
+                                href={`/replies?url=${encodeURIComponent(getPreferredXStatusUrl(replyBuilderUrl) as string)}`}
+                                className="tt-link"
+                              >
+                                <span>Open in compose</span>
+                              </Link>
+                            </div>
+                          ) : null}
+                              </>
+                            );
+                          })()}
                         </div>
                       ))}
                     </div>
                   </div>
                   {selectedTopic.groundedNews ? (
                     <div className="tt-subpanel-soft">
-                      <div className="tt-data-label">Grounded News</div>
+                      <div className="tt-data-label">News context</div>
                       <p className="mt-2 text-sm leading-6 text-slate-200">{selectedTopic.groundedNews.summary}</p>
                     </div>
                   ) : null}
@@ -511,7 +497,7 @@ export function TopicTweetComposer(props: {
             <div className="panel-body grid gap-4 md:grid-cols-[0.7fr_1.3fr]">
               <div className="tt-subpanel-soft">
                 <div className="tt-data-label">Current Step</div>
-                <p className="mt-2 text-sm leading-6 text-slate-200">{latestProgress?.message ?? "Starting topic compose pipeline"}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-200">{latestProgress?.message ?? "Starting topic composition"}</p>
                 <p className="mt-3 text-sm leading-6 text-slate-200">
                   {runMode === "all_goals"
                     ? `${runningGoals} running, ${queuedGoals} queued, ${completedGoals} of ${totalGoals} completed`
@@ -567,6 +553,8 @@ export function TopicTweetComposer(props: {
                 createdAt: selectedReplyTweet.createdAt,
                 tweetText: selectedReplyTweet.text,
                 mediaKind: "none",
+                localFilePath: null,
+                playableFilePath: null,
                 analysis: {
                   captionBrief: null,
                   sceneDescription: null,
@@ -588,9 +576,9 @@ export function TopicTweetComposer(props: {
           <div className="mt-6 space-y-4">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <div className="section-kicker">Draft Options</div>
+                <div className="section-kicker">Draft options</div>
                 <h2 className="section-title mt-3">
-                  {results.length === 1 ? "Single topic tweet/media pairing" : `${results.length} topic tweet/media pairings to compare`}
+                  {results.length === 1 ? "One topic post and media pairing" : `${results.length} topic post and media pairings to compare`}
                 </h2>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -743,6 +731,7 @@ export function TopicTweetComposer(props: {
                         <span className="tt-chip">{formatDate(draft.updatedAt)}</span>
                       </div>
                       {draft.progressMessage ? <p className="text-sm leading-6 text-slate-300">{draft.progressMessage}</p> : null}
+                      <ComposeRunReference draft={draft} />
                       {draft.outputs.map((output, index) => (
                         <div key={`${draft.draftId}-${index}`} className="mt-3 border border-white/10 bg-black/10 p-3">
                           <p className="text-sm leading-7 text-slate-100">{output.text}</p>

@@ -5,10 +5,12 @@ import type {
   DesiredReplyMediaWishlistEntry,
 } from "@/src/lib/reply-composer";
 
-const projectRoot = process.cwd();
-const wishlistPath = path.join(projectRoot, "data", "analysis", "reply-media-wishlist.json");
+function getWishlistPath(): string {
+  return path.join(process.cwd(), "data", "analysis", "reply-media-wishlist.json");
+}
 
 function readWishlist(): DesiredReplyMediaWishlistEntry[] {
+  const wishlistPath = getWishlistPath();
   if (!fs.existsSync(wishlistPath)) {
     return [];
   }
@@ -50,6 +52,7 @@ export function recordAssetWishlist(input: {
   angle: string;
   tweetText: string | null;
 }): DesiredReplyMediaWishlistEntry[] {
+  const wishlistPath = getWishlistPath();
   const current = readWishlist();
   const byKey = new Map(current.map((entry) => [entry.key, entry]));
   const now = new Date().toISOString();
@@ -125,6 +128,7 @@ export function setReplyMediaWishlistStatus(
   key: string,
   status: DesiredReplyMediaWishlistEntry["status"]
 ): DesiredReplyMediaWishlistEntry | null {
+  const wishlistPath = getWishlistPath();
   const current = readWishlist();
   const index = current.findIndex((entry) => entry.key === key);
   if (index === -1) {
@@ -149,6 +153,7 @@ export function setReplyMediaWishlistStatuses(
     return [];
   }
 
+  const wishlistPath = getWishlistPath();
   const keySet = new Set(keys);
   const current = readWishlist();
   const now = new Date().toISOString();

@@ -7,7 +7,11 @@ import {
   type MediaPostSubject
 } from "@/src/lib/media-post-composer";
 import type { ReplyMediaCandidate } from "@/src/lib/reply-composer";
-import { parseGeminiJsonResponse, runGeminiPrompt } from "@/src/server/gemini-cli-json";
+import {
+  getComposeModelProvider,
+  parseComposeJsonResponse,
+  runComposePromptWithProvider
+} from "@/src/server/compose-model-cli";
 import {
   buildMediaPostCleanupPrompt,
   buildMediaPostPlanPrompt,
@@ -29,15 +33,41 @@ export interface MediaPostComposerModel {
   }): Promise<MediaPostDraft>;
 }
 
-export class GeminiCliMediaPostComposerModel implements MediaPostComposerModel {
-  providerId = "gemini-cli";
+interface PromptRunnerInput {
+  prompt: string;
+  imagePaths?: string[];
+  label?: string;
+}
+
+function collectMediaPostImagePaths(input: {
+  subject: MediaPostSubject;
+  candidates: ReplyMediaCandidate[];
+}): string[] {
+  return Array.from(
+    new Set(
+      [input.subject.localFilePath, ...input.candidates.flatMap((candidate) => [candidate.localFilePath])].filter(
+        (value): value is string => typeof value === "string" && value.trim().length > 0
+      )
+    )
+  );
+}
+
+class BaseMediaPostComposerModel implements MediaPostComposerModel {
+  constructor(
+    public providerId: string,
+    private readonly promptRunner: (input: PromptRunnerInput) => Promise<string>
+  ) {}
 
   async planPost(input: {
     request: MediaPostRequest;
     subject: MediaPostSubject;
   }): Promise<MediaPostPlan> {
-    const stdout = await runGeminiPrompt(buildMediaPostPlanPrompt(input));
-    return parseGeminiJsonResponse(stdout, (value) => mediaPostPlanSchema.parse(value));
+    const stdout = await this.promptRunner({
+      prompt: buildMediaPostPlanPrompt(input),
+      imagePaths: collectMediaPostImagePaths({ subject: input.subject, candidates: [] }),
+      label: "media-post-plan"
+    });
+    return parseComposeJsonResponse(stdout, (value) => mediaPostPlanSchema.parse(value));
   }
 
   async composePost(input: {
@@ -46,17 +76,24 @@ export class GeminiCliMediaPostComposerModel implements MediaPostComposerModel {
     plan: MediaPostPlan;
     candidates: ReplyMediaCandidate[];
   }): Promise<MediaPostDraft> {
-    const stdout = await runGeminiPrompt(buildMediaPostPrompt(input));
-    const draft = parseGeminiJsonResponse(stdout, (value) => mediaPostDraftSchema.parse(value));
-    const cleanupStdout = await runGeminiPrompt(
-      buildMediaPostCleanupPrompt({
+    const imagePaths = collectMediaPostImagePaths(input);
+    const stdout = await this.promptRunner({
+      prompt: buildMediaPostPrompt(input),
+      imagePaths,
+      label: "media-post-compose"
+    });
+    const draft = parseComposeJsonResponse(stdout, (value) => mediaPostDraftSchema.parse(value));
+    const cleanupStdout = await this.promptRunner({
+      prompt: buildMediaPostCleanupPrompt({
         request: input.request,
         subject: input.subject,
         plan: input.plan,
         draft
-      })
-    );
-    const cleanedDraft = parseGeminiJsonResponse(cleanupStdout, (value) => mediaPostDraftSchema.parse(value));
+      }),
+      imagePaths,
+      label: "media-post-cleanup"
+    });
+    const cleanedDraft = parseComposeJsonResponse(cleanupStdout, (value) => mediaPostDraftSchema.parse(value));
     const maybeNormalized = normalizeDraftStrings({
       ...cleanedDraft,
       selectedCandidateId: draft.selectedCandidateId
@@ -66,15 +103,17 @@ export class GeminiCliMediaPostComposerModel implements MediaPostComposerModel {
       return maybeNormalized;
     }
 
-    const finalCleanupStdout = await runGeminiPrompt(
-      buildMediaPostCleanupPrompt({
+    const finalCleanupStdout = await this.promptRunner({
+      prompt: buildMediaPostCleanupPrompt({
         request: input.request,
         subject: input.subject,
         plan: input.plan,
         draft: maybeNormalized
-      })
-    );
-    const finalDraft = parseGeminiJsonResponse(finalCleanupStdout, (value) => mediaPostDraftSchema.parse(value));
+      }),
+      imagePaths,
+      label: "media-post-final-cleanup"
+    });
+    const finalDraft = parseComposeJsonResponse(finalCleanupStdout, (value) => mediaPostDraftSchema.parse(value));
 
     return normalizeDraftStrings({
       ...finalDraft,
@@ -83,6 +122,18 @@ export class GeminiCliMediaPostComposerModel implements MediaPostComposerModel {
   }
 }
 
+export class GeminiCliMediaPostComposerModel extends BaseMediaPostComposerModel {
+  constructor() {
+    super("gemini-cli", ({ prompt }) => runComposePromptWithProvider("gemini-cli", { prompt }));
+  }
+}
+
+export class CodexExecMediaPostComposerModel extends BaseMediaPostComposerModel {
+  constructor() {
+    super("codex-exec", (input) => runComposePromptWithProvider("codex-exec", input));
+  }
+}
+
 export function createMediaPostComposerModel(): MediaPostComposerModel {
-  return new GeminiCliMediaPostComposerModel();
+  return getComposeModelProvider() === "gemini-cli" ? new GeminiCliMediaPostComposerModel() : new CodexExecMediaPostComposerModel();
 }

@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { AssetStarButton } from "@/src/components/asset-star-button";
 import { ANALYSIS_FACET_NAMES, type AnalysisFacetName } from "@/src/lib/analysis-schema";
 import { resolveMediaDisplayUrl } from "@/src/lib/media-display";
 import { MediaPreview } from "@/src/components/media-preview";
+import { ReplyComposer } from "@/src/components/reply-composer";
+import { getPreferredXStatusUrl } from "@/src/lib/x-status-url";
 import type { HybridSearchResult } from "@/src/server/chroma-facets";
 
 const DEFAULT_VISIBLE_GRID_COUNT = 12;
@@ -81,26 +84,64 @@ function getGridClassName(gridColumns: number): string {
   return "grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4";
 }
 
+function formatDate(value: string | null | undefined): string {
+  if (!value) {
+    return "unknown";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
 export function FacetSearch() {
   const [query, setQuery] = useState("");
   const [facetName, setFacetName] = useState("");
   const [presetValue, setPresetValue] = useState("");
   const [limit, setLimit] = useState("20");
+  const [highQualityOnly, setHighQualityOnly] = useState(true);
+  const [allFacetsMode, setAllFacetsMode] = useState<"facet_concat" | "combined_blob">("combined_blob");
   const [gridColumns, setGridColumns] = useState(3);
   const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE_GRID_COUNT);
   const [results, setResults] = useState<HybridSearchResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
+  const [openComposerRowId, setOpenComposerRowId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const openComposerRef = useRef<HTMLDivElement | null>(null);
   const presetTerms = getFacetPresets(facetName);
   const rows = results?.results ?? [];
   const clampedVisibleCount = rows.length === 0 ? 0 : Math.min(visibleCount, rows.length);
   const visibleRows = rows.slice(0, clampedVisibleCount);
 
+  useEffect(() => {
+    if (!openComposerRowId || !openComposerRef.current) {
+      return;
+    }
+
+    openComposerRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest"
+    });
+
+    const focusTarget = openComposerRef.current.querySelector<HTMLElement>(
+      "select, input, textarea, button, a[href]"
+    );
+    focusTarget?.focus({ preventScroll: true });
+  }, [openComposerRowId]);
+
   async function runSearch(): Promise<void> {
     setErrorMessage(null);
+    setWarningMessage(null);
     const params = new URLSearchParams({ query, limit });
     if (facetName) {
       params.set("facetName", facetName);
+    } else {
+      params.set("allFacetsMode", allFacetsMode);
+    }
+    if (!highQualityOnly) {
+      params.set("all", "1");
     }
 
     const response = await fetch(`/api/search/facets?${params.toString()}`);
@@ -113,6 +154,7 @@ export function FacetSearch() {
 
     const nextResults = body as HybridSearchResult;
     setResults(nextResults);
+    setWarningMessage(nextResults.warningMessage);
     setVisibleCount(
       Math.min(
         nextResults.results.length,
@@ -126,16 +168,19 @@ export function FacetSearch() {
       <div className="panel-body">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="section-kicker">Facet Search</div>
-            <h2 className="section-title mt-3">Hybrid search across Chroma and lexical facets</h2>
+            <div className="section-kicker">Media search</div>
+            <h2 className="section-title mt-3">Find reusable media</h2>
+            <p className="page-intro mt-3 max-w-3xl">
+              Search saved media by subject, tone, or message, then open the result you want to draft from.
+            </p>
           </div>
-          <div className="tt-chip tt-chip-accent">{facetName || "all facets"}</div>
+          <div className="tt-chip tt-chip-accent">{facetName || "all media fields"}</div>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="terminal-window">
             <div className="window-bar">
-              <div className="section-kicker">Query Console</div>
+              <div className="section-kicker">Search</div>
               <div className="window-dots">
                 <span className="window-dot bg-orange" />
                 <span className="window-dot bg-accent" />
@@ -144,7 +189,7 @@ export function FacetSearch() {
             </div>
             <div className="panel-body space-y-4">
               <label className="tt-field">
-                <span className="tt-field-label">Query</span>
+                <span className="tt-field-label">Search</span>
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -154,13 +199,13 @@ export function FacetSearch() {
                     }
                   }}
                   type="text"
-                  placeholder="reaction image for market panic, sarcastic win screen, bullish chart meme..."
+                  placeholder="reaction image for market panic, product demo clip, bullish chart meme..."
                   className="tt-input"
                 />
               </label>
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="tt-field">
-                  <span className="tt-field-label">Facet Scope</span>
+                  <span className="tt-field-label">Search within</span>
                   <select
                     value={facetName}
                     onChange={(event) => {
@@ -170,7 +215,7 @@ export function FacetSearch() {
                     }}
                     className="tt-select"
                   >
-                    <option value="">All facets (default)</option>
+                    <option value="">All media fields</option>
                     {ANALYSIS_FACET_NAMES.map((name) => (
                       <option key={name} value={name}>
                         {name}
@@ -179,7 +224,7 @@ export function FacetSearch() {
                   </select>
                 </label>
                 <label className="tt-field">
-                  <span className="tt-field-label">Result Limit</span>
+                  <span className="tt-field-label">Results</span>
                   <select value={limit} onChange={(event) => setLimit(event.target.value)} className="tt-select">
                     <option value="10">10</option>
                     <option value="20">20</option>
@@ -189,8 +234,21 @@ export function FacetSearch() {
                   </select>
                 </label>
               </div>
+              {!facetName ? (
+                <label className="tt-field">
+                  <span className="tt-field-label">Search method</span>
+                  <select
+                    value={allFacetsMode}
+                    onChange={(event) => setAllFacetsMode(event.target.value as "facet_concat" | "combined_blob")}
+                    className="tt-select"
+                  >
+                    <option value="facet_concat">Compare each attribute separately</option>
+                    <option value="combined_blob">Search the full summary</option>
+                  </select>
+                </label>
+              ) : null}
               <label className="tt-field">
-                <span className="tt-field-label">Common Terms</span>
+                <span className="tt-field-label">Quick starts</span>
                 <select
                   value={presetValue}
                   onChange={(event) => {
@@ -202,7 +260,7 @@ export function FacetSearch() {
                   }}
                   className="tt-select"
                 >
-                  <option value="">Choose a common term...</option>
+                  <option value="">Choose a starting prompt...</option>
                   {presetTerms.map((term) => (
                     <option key={term} value={term}>
                       {term}
@@ -225,6 +283,18 @@ export function FacetSearch() {
                   </button>
                 ))}
               </div>
+              <label className="tt-field">
+                <span className="tt-field-label">Limit results</span>
+                <div className="flex items-center gap-3 rounded border border-white/10 bg-[#0f1726] px-3 py-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={highQualityOnly}
+                    onChange={(event) => setHighQualityOnly(event.target.checked)}
+                    className="accent-cyan"
+                  />
+                  <span>Only show stronger candidates: starred assets or items with repeat or similarity signals</span>
+                </div>
+              </label>
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   className="tt-button"
@@ -234,41 +304,60 @@ export function FacetSearch() {
                   <span>{isPending ? "Searching..." : "Search"}</span>
                 </button>
                 {errorMessage ? <div className="tt-chip tt-chip-danger">{errorMessage}</div> : null}
+                {warningMessage ? <div className="tt-chip border border-amber-400/40 bg-amber-400/10 text-amber-100">{warningMessage}</div> : null}
               </div>
             </div>
           </div>
 
           <div className="terminal-window">
             <div className="window-bar">
-              <div className="section-kicker">Query Mode</div>
-              <div className="tt-chip">vector + lexical</div>
+              <div className="section-kicker">How search works</div>
+              <div className="tt-chip">one row per asset</div>
             </div>
             <div className="panel-body space-y-4">
               <div className="tt-subpanel">
                 <p className="tt-copy">
-                Leave scope on `All facets (default)` to query across the full usage-analysis surface. Search merges Chroma vector retrieval with a lexical pass, then de-dupes the hits by usage facet.
+                  Search runs across saved media summaries and ranks the closest matches first.
                 </p>
               </div>
+              {results?.warningMessage ? (
+                <div className="tt-subpanel border border-amber-400/30 bg-amber-400/10">
+                  <p className="tt-copy text-amber-100">
+                    {results.warningMessage}
+                  </p>
+                </div>
+              ) : null}
               <div className="tt-subpanel">
                 <p className="tt-copy">
-                Use `Common Terms` for a fast starting point, then overwrite the query freely. The preset bank changes with the selected facet.
+                  Use the default method for broad discovery, or switch methods when you want to search every attribute separately.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <span className="tt-chip">default: all facets</span>
+                <span className="tt-chip">default: stronger candidates only</span>
+                <span className="tt-chip">one row per asset</span>
+                <span className="tt-chip">default: all media fields</span>
+                {!facetName ? <span className="tt-chip">method: {allFacetsMode === "facet_concat" ? "compare separately" : "full summary"}</span> : null}
                 <span className="tt-chip">merged ranking</span>
-                <span className="tt-chip">deduped results</span>
-                <span className="tt-chip">default limit: 20</span>
+                <span className="tt-chip">limit: {limit}</span>
               </div>
             </div>
           </div>
         </div>
 
         <div className="mt-6 grid gap-4">
+          {warningMessage ? (
+            <div className="terminal-window border border-amber-400/30">
+              <div className="panel-body">
+                <div className="tt-chip border border-amber-400/40 bg-amber-400/10 text-amber-100">
+                  {warningMessage}
+                </div>
+              </div>
+            </div>
+          ) : null}
           {rows.length === 0 ? (
             <div className="terminal-window">
               <div className="panel-body">
-                <div className="tt-placeholder">No search results yet.</div>
+                <div className="tt-placeholder">No results yet. Try a broader phrase or turn off the stronger-candidates filter.</div>
               </div>
             </div>
           ) : (
@@ -320,9 +409,17 @@ export function FacetSearch() {
                     previewUrl: row.media?.previewUrl,
                     sourceUrl: row.media?.sourceUrl
                   });
+                  const tweetUrl = getPreferredXStatusUrl(row.media?.tweetUrl ?? null);
+                  const composerPanelId = `facet-search-reply-composer-${row.id}`;
+                  const isComposerOpen = openComposerRowId === row.id;
+                  const canComposeReply = Boolean(row.metadata.usage_id && row.metadata.tweet_id);
+                  const mediaKind = typeof row.metadata.media_kind === "string" ? row.metadata.media_kind : "unknown";
+                  const facetNameLabel = String(row.metadata.facet_name ?? "asset summary");
+                  const usageId = typeof row.metadata.usage_id === "string" ? row.metadata.usage_id : null;
+                  const tweetId = typeof row.metadata.tweet_id === "string" ? row.metadata.tweet_id : null;
 
                   return (
-                    <article key={row.id} className="terminal-window">
+                    <article key={row.id} className="neon-card min-w-0">
                       <div className="panel-body space-y-4">
                         {displayUrl ? (
                           <div className="tt-media-frame aspect-video">
@@ -331,12 +428,32 @@ export function FacetSearch() {
                               imageUrl={displayUrl}
                               videoFilePath={row.media?.mediaPlayableFilePath}
                             />
+                            {row.media?.mediaAssetId ? (
+                              <div className="absolute right-1.5 top-1.5 z-10">
+                                <AssetStarButton
+                                  assetId={row.media.mediaAssetId}
+                                  starred={row.media.mediaAssetStarred}
+                                  className={
+                                    row.media.mediaAssetStarred
+                                      ? "tt-icon-button tt-icon-button-secondary bg-[#121826]/90"
+                                      : "tt-icon-button bg-[#121826]/90"
+                                  }
+                                  wrapperClassName="flex items-center"
+                                />
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                         <div className="flex flex-wrap items-start justify-between gap-3">
-                          <strong className="font-[family:var(--font-label)] text-xs uppercase tracking-[0.24em] text-accent">
-                            {String(row.metadata.facet_name ?? "facet")}
-                          </strong>
+                          <div className="min-w-0">
+                            <strong className="font-[family:var(--font-label)] text-xs uppercase tracking-[0.24em] text-accent">
+                              {facetNameLabel}
+                            </strong>
+                            <div className="mt-2 text-sm text-slate-400">
+                              {row.media?.authorUsername ? `@${row.media.authorUsername}` : row.media?.authorDisplayName ?? "Unknown author"} ·{" "}
+                              {formatDate(row.media?.createdAt)}
+                            </div>
+                          </div>
                           <div className="flex flex-wrap gap-2">
                             <span className="tt-chip">score {row.combinedScore.toFixed(3)}</span>
                             <span className="tt-chip">
@@ -344,21 +461,118 @@ export function FacetSearch() {
                             </span>
                           </div>
                         </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="tt-chip">{mediaKind}</span>
+                          <span className={`tt-chip ${row.media?.mediaAssetStarred ? "tt-chip-accent" : ""}`}>
+                            {row.media?.mediaAssetStarred ? "starred" : "not starred"}
+                          </span>
+                          <span className={`tt-chip ${(row.media?.duplicateGroupUsageCount ?? 0) > 1 ? "tt-chip-accent" : ""}`}>
+                            duplicates {row.media?.duplicateGroupUsageCount ?? 0}
+                          </span>
+                          <span className={`tt-chip ${(row.media?.hotnessScore ?? 0) >= 4 ? "tt-chip-accent" : ""}`}>
+                            hot {(row.media?.hotnessScore ?? 0).toFixed(2)}
+                          </span>
+                          <span className="tt-chip">via {row.matchedBy.join(" + ")}</span>
+                          <span className="tt-chip">lexical {row.lexicalScore.toFixed(3)}</span>
+                        </div>
                         <div className="text-sm text-slate-300">
-                          tweet {String(row.metadata.tweet_id ?? "unknown")} · usage {String(row.metadata.usage_id ?? "unknown")}
+                          asset {String(row.media?.mediaAssetId ?? row.metadata.asset_id ?? "unknown")} · representative usage{" "}
+                          {String(row.metadata.usage_id ?? "unknown")}
                         </div>
                         {row.media?.tweetText ? <p className="text-sm leading-7 text-slate-200">{row.media.tweetText}</p> : null}
                         <div className="flex flex-wrap gap-2">
-                          {row.metadata.usage_id ? (
-                            <Link href={`/usage/${String(row.metadata.usage_id)}`} className="tt-link">
+                          {usageId ? (
+                            <Link href={`/usage/${usageId}`} className="tt-link">
                               <span>Open usage</span>
                             </Link>
                           ) : null}
-                          <span className="tt-chip">{String(row.metadata.media_kind ?? "unknown media")}</span>
-                          <span className="tt-chip">via {row.matchedBy.join(" + ")}</span>
-                          <span className="tt-chip">lexical {row.lexicalScore.toFixed(3)}</span>
+                          {tweetUrl ? (
+                            <Link href={tweetUrl} className="tt-link" target="_blank" rel="noreferrer">
+                              <span>Open on X</span>
+                            </Link>
+                          ) : null}
+                          {tweetUrl ? (
+                            <Link href={`/replies?url=${encodeURIComponent(tweetUrl)}`} className="tt-link">
+                              <span>Open in reply builder</span>
+                            </Link>
+                          ) : null}
+                          {tweetId ? (
+                            <Link href={`/clone?tweetId=${encodeURIComponent(tweetId)}`} className="tt-link">
+                              <span>Open in clone builder</span>
+                            </Link>
+                          ) : null}
+                          {canComposeReply ? (
+                            <button
+                              type="button"
+                              className="tt-button"
+                              aria-controls={composerPanelId}
+                              aria-expanded={isComposerOpen}
+                              onClick={() => setOpenComposerRowId((current) => (current === row.id ? null : row.id))}
+                            >
+                              <span>{isComposerOpen ? "Hide reply composer" : "Compose reply"}</span>
+                            </button>
+                          ) : null}
                           {row.media?.mediaAssetId ? <span className="tt-chip">{row.media.mediaAssetId}</span> : null}
                         </div>
+                        {isComposerOpen && usageId && tweetId ? (
+                          <div
+                            id={composerPanelId}
+                            ref={openComposerRef}
+                            className="scroll-mt-24 border-t border-white/10 pt-4"
+                          >
+                            <ReplyComposer
+                              usageId={usageId}
+                              tweetId={tweetId}
+                              subject={{
+                                usageId,
+                                tweetId,
+                                tweetUrl,
+                                authorUsername: row.media?.authorUsername ?? null,
+                                createdAt: row.media?.createdAt ?? null,
+                                tweetText: row.media?.tweetText ?? null,
+                                mediaKind,
+                                localFilePath: row.media?.mediaLocalFilePath ?? null,
+                                playableFilePath: row.media?.mediaPlayableFilePath ?? null,
+                                analysis: {
+                                  captionBrief:
+                                    typeof row.metadata.caption_brief === "string" ? row.metadata.caption_brief : null,
+                                  sceneDescription:
+                                    typeof row.metadata.scene_description === "string"
+                                      ? row.metadata.scene_description
+                                      : null,
+                                  primaryEmotion:
+                                    typeof row.metadata.primary_emotion === "string"
+                                      ? row.metadata.primary_emotion
+                                      : null,
+                                  conveys: typeof row.metadata.conveys === "string" ? row.metadata.conveys : null,
+                                  userIntent:
+                                    typeof row.metadata.user_intent === "string" ? row.metadata.user_intent : null,
+                                  rhetoricalRole:
+                                    typeof row.metadata.rhetorical_role === "string"
+                                      ? row.metadata.rhetorical_role
+                                      : null,
+                                  textMediaRelationship:
+                                    typeof row.metadata.text_media_relationship === "string"
+                                      ? row.metadata.text_media_relationship
+                                      : null,
+                                  culturalReference:
+                                    typeof row.metadata.cultural_reference === "string"
+                                      ? row.metadata.cultural_reference
+                                      : null,
+                                  analogyTarget:
+                                    typeof row.metadata.analogy_target === "string"
+                                      ? row.metadata.analogy_target
+                                      : null,
+                                  searchKeywords: Array.isArray(row.metadata.search_keywords)
+                                    ? row.metadata.search_keywords.filter(
+                                        (value): value is string => typeof value === "string"
+                                      )
+                                    : []
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : null}
                         <pre className="tt-log">{row.document}</pre>
                       </div>
                     </article>

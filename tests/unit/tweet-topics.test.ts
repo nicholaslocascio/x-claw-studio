@@ -151,6 +151,28 @@ describe("computeTopicHotnessScore", () => {
 
     expect(fresh).toBeGreaterThan(stale);
   });
+
+  it("does not let a tiny fresh cluster outrank a stronger slightly older one too easily", () => {
+    const nowMs = Date.parse("2026-03-11T12:00:00.000Z");
+    const tinyFresh = computeTopicHotnessScore({
+      tweetCount: 1,
+      uniqueAuthorCount: 1,
+      totalLikes: 10,
+      recentTweetCount24h: 1,
+      mostRecentTimestampMs: nowMs - 60 * 60 * 1000,
+      nowMs
+    });
+    const broaderOlder = computeTopicHotnessScore({
+      tweetCount: 6,
+      uniqueAuthorCount: 5,
+      totalLikes: 1200,
+      recentTweetCount24h: 2,
+      mostRecentTimestampMs: nowMs - 30 * 60 * 60 * 1000,
+      nowMs
+    });
+
+    expect(broaderOlder).toBeGreaterThan(tinyFresh);
+  });
 });
 
 describe("buildTopicIndex", () => {

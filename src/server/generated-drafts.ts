@@ -10,10 +10,12 @@ import type {
   GeneratedDraftStatus
 } from "@/src/lib/generated-drafts";
 import type { MediaPostResult } from "@/src/lib/media-post-composer";
+import type { ManualPostResult } from "@/src/lib/manual-post-composer";
 import type { ReplyCompositionBatchResult, ReplyCompositionResult } from "@/src/lib/reply-composer";
+import type { CloneTweetResult } from "@/src/lib/clone-tweet-composer";
 import type { ExtractedTweet, MediaAssetRecord, MediaAssetSummary, TopicClusterRecord, TweetUsageRecord } from "@/src/lib/types";
 import type { TopicPostBatchResult, TopicPostResult } from "@/src/lib/topic-composer";
-import { getDashboardData } from "@/src/server/data";
+import { getCapturedTweetData, getLightweightUsageData, getTopicPageData } from "@/src/server/data";
 import { readMediaAssetIndex, readMediaAssetSummaries } from "@/src/server/media-assets";
 
 const projectRoot = process.cwd();
@@ -77,6 +79,8 @@ export function createGeneratedDraft(input: {
   tweetId?: string | null;
   topicId?: string | null;
   assetId?: string | null;
+  composeRunId?: string | null;
+  composeRunLogDir?: string | null;
   requestGoal?: string | null;
   requestMode?: string | null;
   progressStage?: string | null;
@@ -90,6 +94,8 @@ export function createGeneratedDraft(input: {
     status: "running",
     createdAt: now,
     updatedAt: now,
+    composeRunId: input.composeRunId ?? null,
+    composeRunLogDir: input.composeRunLogDir ?? null,
     usageId: input.usageId ?? null,
     tweetId: input.tweetId ?? null,
     topicId: input.topicId ?? null,
@@ -110,7 +116,12 @@ export function createGeneratedDraft(input: {
 
 export function updateGeneratedDraft(
   draftId: string,
-  update: Partial<Pick<GeneratedDraftRecord, "status" | "progressStage" | "progressMessage" | "progressDetail" | "errorMessage" | "outputs">>
+  update: Partial<
+    Pick<
+      GeneratedDraftRecord,
+      "status" | "composeRunId" | "composeRunLogDir" | "progressStage" | "progressMessage" | "progressDetail" | "errorMessage" | "outputs"
+    >
+  >
 ): GeneratedDraftRecord | null {
   const current = readDrafts();
   const index = current.findIndex((record) => record.draftId === draftId);
@@ -146,6 +157,13 @@ function buildReplyOutputs(result: ReplyCompositionResult | ReplyCompositionBatc
     selectedMediaDisplayUrl: item.selectedMedia?.displayUrl ?? null,
     selectedMediaLocalFilePath: item.selectedMedia?.localFilePath ?? null,
     selectedMediaVideoFilePath: item.selectedMedia?.videoFilePath ?? null,
+    selectedMediaCombinedScore: item.selectedMedia?.combinedScore ?? null,
+    selectedMediaRankingScore: item.selectedMedia?.rankingScore ?? null,
+    selectedMediaMatchReason: item.selectedMedia?.matchReason ?? null,
+    selectedMediaAssetStarred: item.selectedMedia?.assetStarred ?? false,
+    selectedMediaAssetUsageCount: item.selectedMedia?.assetUsageCount ?? null,
+    selectedMediaDuplicateGroupUsageCount: item.selectedMedia?.duplicateGroupUsageCount ?? null,
+    selectedMediaHotnessScore: item.selectedMedia?.hotnessScore ?? null,
     alternativeMedia: item.alternativeMedia.map((candidate) => buildDraftMediaCandidate(candidate)),
     postedToXAt: null,
     postedToXUrl: null,
@@ -173,11 +191,18 @@ function buildTopicOutputs(result: TopicPostResult | TopicPostBatchResult): Gene
     selectedMediaUsageId: item.selectedMedia?.usageId ?? null,
     selectedMediaAssetId: item.selectedMedia?.assetId ?? null,
     selectedMediaTweetId: item.selectedMedia?.tweetId ?? null,
-    selectedMediaTweetUrl: item.selectedMedia?.tweetUrl ?? null,
-    selectedMediaDisplayUrl: item.selectedMedia?.displayUrl ?? null,
-    selectedMediaLocalFilePath: item.selectedMedia?.localFilePath ?? null,
-    selectedMediaVideoFilePath: item.selectedMedia?.videoFilePath ?? null,
-    postedToXAt: null,
+      selectedMediaTweetUrl: item.selectedMedia?.tweetUrl ?? null,
+      selectedMediaDisplayUrl: item.selectedMedia?.displayUrl ?? null,
+      selectedMediaLocalFilePath: item.selectedMedia?.localFilePath ?? null,
+      selectedMediaVideoFilePath: item.selectedMedia?.videoFilePath ?? null,
+      selectedMediaCombinedScore: item.selectedMedia?.combinedScore ?? null,
+      selectedMediaRankingScore: item.selectedMedia?.rankingScore ?? null,
+      selectedMediaMatchReason: item.selectedMedia?.matchReason ?? null,
+      selectedMediaAssetStarred: item.selectedMedia?.assetStarred ?? false,
+      selectedMediaAssetUsageCount: item.selectedMedia?.assetUsageCount ?? null,
+      selectedMediaDuplicateGroupUsageCount: item.selectedMedia?.duplicateGroupUsageCount ?? null,
+      selectedMediaHotnessScore: item.selectedMedia?.hotnessScore ?? null,
+      postedToXAt: null,
     postedToXUrl: null,
     postedToXError: null,
     typefullySavedAt: null,
@@ -210,6 +235,90 @@ function buildMediaOutputs(result: MediaPostResult): GeneratedDraftOutputRecord[
       selectedMediaDisplayUrl: result.selectedMedia?.displayUrl ?? null,
       selectedMediaLocalFilePath,
       selectedMediaVideoFilePath,
+      selectedMediaCombinedScore: result.selectedMedia?.combinedScore ?? null,
+      selectedMediaRankingScore: result.selectedMedia?.rankingScore ?? null,
+      selectedMediaMatchReason: result.selectedMedia?.matchReason ?? null,
+      selectedMediaAssetStarred: result.selectedMedia?.assetStarred ?? false,
+      selectedMediaAssetUsageCount: result.selectedMedia?.assetUsageCount ?? null,
+      selectedMediaDuplicateGroupUsageCount: result.selectedMedia?.duplicateGroupUsageCount ?? null,
+      selectedMediaHotnessScore: result.selectedMedia?.hotnessScore ?? null,
+      postedToXAt: null,
+      postedToXUrl: null,
+      postedToXError: null,
+      typefullySavedAt: null,
+      typefullyDraftId: null,
+      typefullyStatus: null,
+      typefullyPrivateUrl: null,
+      typefullyShareUrl: null,
+      typefullyError: null
+    }
+  ];
+}
+
+function buildManualPostOutputs(result: ManualPostResult): GeneratedDraftOutputRecord[] {
+  return [
+    {
+      goal: null,
+      text: result.tweet.text,
+      whyThisWorks: result.tweet.whyThisTweetWorks,
+      mediaSelectionReason: result.tweet.mediaSelectionReason,
+      postingNotes: result.tweet.postingNotes,
+      selectedMediaLabel: result.selectedMedia?.sourceLabel ?? result.selectedMedia?.tweetText ?? null,
+      selectedMediaSourceType: result.selectedMedia?.sourceType ?? null,
+      selectedMediaCandidateId: result.selectedMedia?.candidateId ?? null,
+      selectedMediaUsageId: result.selectedMedia?.usageId ?? null,
+      selectedMediaAssetId: result.selectedMedia?.assetId ?? null,
+      selectedMediaTweetId: result.selectedMedia?.tweetId ?? null,
+      selectedMediaTweetUrl: result.selectedMedia?.tweetUrl ?? null,
+      selectedMediaDisplayUrl: result.selectedMedia?.displayUrl ?? null,
+      selectedMediaLocalFilePath: result.selectedMedia?.localFilePath ?? null,
+      selectedMediaVideoFilePath: result.selectedMedia?.videoFilePath ?? null,
+      selectedMediaCombinedScore: result.selectedMedia?.combinedScore ?? null,
+      selectedMediaRankingScore: result.selectedMedia?.rankingScore ?? null,
+      selectedMediaMatchReason: result.selectedMedia?.matchReason ?? null,
+      selectedMediaAssetStarred: result.selectedMedia?.assetStarred ?? false,
+      selectedMediaAssetUsageCount: result.selectedMedia?.assetUsageCount ?? null,
+      selectedMediaDuplicateGroupUsageCount: result.selectedMedia?.duplicateGroupUsageCount ?? null,
+      selectedMediaHotnessScore: result.selectedMedia?.hotnessScore ?? null,
+      postedToXAt: null,
+      postedToXUrl: null,
+      postedToXError: null,
+      typefullySavedAt: null,
+      typefullyDraftId: null,
+      typefullyStatus: null,
+      typefullyPrivateUrl: null,
+      typefullyShareUrl: null,
+      typefullyError: null
+    }
+  ];
+}
+
+function buildCloneTweetOutputs(result: CloneTweetResult): GeneratedDraftOutputRecord[] {
+  return [
+    {
+      goal: null,
+      text: result.tweet.text,
+      whyThisWorks: result.tweet.whyThisTweetWorks,
+      mediaSelectionReason: result.tweet.mediaSelectionReason,
+      postingNotes: result.tweet.postingNotes,
+      selectedMediaLabel: result.selectedMedia?.sourceLabel ?? result.selectedMedia?.tweetText ?? null,
+      selectedMediaSourceType: result.selectedMedia?.sourceType ?? null,
+      selectedMediaCandidateId: result.selectedMedia?.candidateId ?? null,
+      selectedMediaUsageId: result.selectedMedia?.usageId ?? null,
+      selectedMediaAssetId: result.selectedMedia?.assetId ?? null,
+      selectedMediaTweetId: result.selectedMedia?.tweetId ?? null,
+      selectedMediaTweetUrl: result.selectedMedia?.tweetUrl ?? null,
+      selectedMediaDisplayUrl: result.selectedMedia?.displayUrl ?? null,
+      selectedMediaLocalFilePath: result.selectedMedia?.localFilePath ?? null,
+      selectedMediaVideoFilePath: result.selectedMedia?.videoFilePath ?? null,
+      selectedMediaCombinedScore: result.selectedMedia?.combinedScore ?? null,
+      selectedMediaRankingScore: result.selectedMedia?.rankingScore ?? null,
+      selectedMediaMatchReason: result.selectedMedia?.matchReason ?? null,
+      selectedMediaAssetStarred: result.selectedMedia?.assetStarred ?? false,
+      selectedMediaAssetUsageCount: result.selectedMedia?.assetUsageCount ?? null,
+      selectedMediaDuplicateGroupUsageCount: result.selectedMedia?.duplicateGroupUsageCount ?? null,
+      selectedMediaHotnessScore: result.selectedMedia?.hotnessScore ?? null,
+      alternativeMedia: result.alternativeMedia.map((candidate) => buildDraftMediaCandidate(candidate)),
       postedToXAt: null,
       postedToXUrl: null,
       postedToXError: null,
@@ -238,6 +347,12 @@ function buildDraftMediaCandidate(candidate: ReplyCompositionResult["alternative
     sourceType: candidate.sourceType,
     sourceLabel: candidate.sourceLabel,
     combinedScore: candidate.combinedScore,
+    rankingScore: candidate.rankingScore,
+    matchReason: candidate.matchReason,
+    assetStarred: candidate.assetStarred,
+    assetUsageCount: candidate.assetUsageCount,
+    duplicateGroupUsageCount: candidate.duplicateGroupUsageCount,
+    hotnessScore: candidate.hotnessScore,
     sceneDescription: candidate.analysis?.sceneDescription ?? null,
     primaryEmotion: candidate.analysis?.primaryEmotion ?? null,
     conveys: candidate.analysis?.conveys ?? null
@@ -264,17 +379,19 @@ export function listGeneratedDraftViews(filter?: {
   limit?: number;
 }): GeneratedDraftViewRecord[] {
   const drafts = listGeneratedDrafts(filter);
-  const dashboard = getDashboardData();
+  const usages = getLightweightUsageData();
+  const capturedTweetData = getCapturedTweetData();
+  const topicData = getTopicPageData();
   const assetIndex = readMediaAssetIndex();
   const assetSummaryFile = readMediaAssetSummaries();
-  const usageMap = new Map(dashboard.tweetUsages.map((usage) => [usage.usageId, usage]));
-  const tweetMap = new Map(dashboard.capturedTweets.map((entry) => [entry.tweet.tweetId ?? entry.tweetKey, entry.tweet]));
+  const usageMap = new Map(usages.map((usage) => [usage.usageId, usage]));
+  const tweetMap = new Map(capturedTweetData.capturedTweets.map((entry) => [entry.tweet.tweetId ?? entry.tweetKey, entry.tweet]));
   const tweetUsageMap = new Map<string, TweetUsageRecord[]>();
   const assetMap = new Map((assetIndex?.assets ?? []).map((asset) => [asset.assetId, asset]));
   const assetSummaryMap = new Map((assetSummaryFile?.summaries ?? []).map((summary) => [summary.assetId, summary]));
-  const topicMap = new Map(dashboard.topicClusters.map((topic) => [topic.topicId, topic]));
+  const topicMap = new Map(topicData.topicClusters.map((topic) => [topic.topicId, topic]));
 
-  for (const usage of dashboard.tweetUsages) {
+  for (const usage of usages) {
     if (!usage.tweet.tweetId) {
       continue;
     }
@@ -320,14 +437,18 @@ export function listGeneratedDraftViews(filter?: {
 export function markGeneratedDraftComplete(input: {
   draftId: string;
   kind: GeneratedDraftKind;
-  result: ReplyCompositionResult | ReplyCompositionBatchResult | TopicPostResult | TopicPostBatchResult | MediaPostResult;
+  result: ReplyCompositionResult | ReplyCompositionBatchResult | TopicPostResult | TopicPostBatchResult | MediaPostResult | ManualPostResult | CloneTweetResult;
 }): GeneratedDraftRecord | null {
   const outputs =
     input.kind === "reply"
       ? buildReplyOutputs(input.result as ReplyCompositionResult | ReplyCompositionBatchResult)
       : input.kind === "topic_post"
         ? buildTopicOutputs(input.result as TopicPostResult | TopicPostBatchResult)
-        : buildMediaOutputs(input.result as MediaPostResult);
+        : input.kind === "media_post"
+          ? buildMediaOutputs(input.result as MediaPostResult)
+          : input.kind === "clone_tweet"
+            ? buildCloneTweetOutputs(input.result as CloneTweetResult)
+            : buildManualPostOutputs(input.result as ManualPostResult);
 
   return updateGeneratedDraft(input.draftId, {
     status: "complete",

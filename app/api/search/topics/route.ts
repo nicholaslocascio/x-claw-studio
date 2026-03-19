@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { searchTopicIndex } from "@/src/server/chroma-facets";
+import { logRouteError } from "@/src/server/api-error";
 
 export async function GET(request: Request) {
   try {
@@ -18,8 +19,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json(result);
   } catch (error) {
+    const message = logRouteError("search/topics", request, error, "Unknown search error");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown search error" },
+      { error: message },
       { status: 500 }
     );
   }

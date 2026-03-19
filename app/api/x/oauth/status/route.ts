@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensureValidXUserAuth, getXOAuthConfigStatus, readXAuthStore } from "@/src/server/x-auth";
+import { logRouteError } from "@/src/server/api-error";
 
 function toPublicAccount(account: {
   accountId: string;
@@ -19,7 +20,7 @@ function toPublicAccount(account: {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const config = getXOAuthConfigStatus();
   let store = readXAuthStore();
 
@@ -29,7 +30,7 @@ export async function GET() {
       store = readXAuthStore();
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to refresh X auth";
+    const message = logRouteError("x/oauth/status", request, error, "Failed to refresh X auth");
     return NextResponse.json({
       ...config,
       connected: store.accounts.length > 0,

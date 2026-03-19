@@ -7,6 +7,7 @@ node_modules/
 .env.swp
 
 data/
+data/control/logs/stack-errors.log
 coverage/
 dist/
 build/
@@ -17,3 +18,4 @@ build/
 .DS_Store
 .agents/
 tmp
+.gstack/

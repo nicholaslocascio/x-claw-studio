@@ -22,6 +22,14 @@ Only log things that future contributors are likely to need.
 
 ## Current Entries
 
+## 2026-03-13: Keep dashboard assembly cached and move deferred capture maintenance into a worker
+
+- Context: page loads and focused tweet lookup could stall the Next.js server because `getDashboardData()` rebuilt the full file-backed read model on every read, and deferred capture post-processing still started heavy maintenance inside the request process.
+- Decision: add an in-process dashboard snapshot cache keyed by cheap file and directory mtimes, and queue deferred capture post-processing through a detached CLI worker instead of `void`-calling the maintenance function in-process.
+- Why: the dashboard read model is expensive but mostly stable between writes, and capture maintenance is operational work that should not compete with page rendering on the same event loop.
+- Impact: repeat UI reads and helper lookups can reuse one assembled snapshot per server process until the backing files change, and focused capture paths should return before asset sync and summary rebuild work starts chewing on the web server.
+- Follow-up: if the cache key still misses edge cases or the first render remains too heavy, move more of the duplicate-group and summary computation into persisted maintenance artifacts instead of request-time assembly.
+
 ## 2026-03-12: Move primary capture off OpenClaw and onto the X API
 
 - Context: OpenClaw-driven scraping put the main capture path at odds with X's platform rules and forced the crawl to depend on a live browser attachment.
@@ -53,6 +61,21 @@ Only log things that future contributors are likely to need.
 - Why: the current compose path usually makes three Gemini CLI calls per draft (`plan -> compose -> cleanup`), and `all_goals` multiplies that cost quickly. Prompt size matters, but call count is the first lever.
 - Impact: future speed work should start in the composer model adapters and prompt builders, measure how many Gemini invocations a workflow makes, and avoid blaming Gemini itself before checking local search or Chroma startup overhead.
 - Follow-up: add a dedicated fast validation harness for one-shot prompt iteration, then decide whether cleanup should become conditional instead of always-on.
+
+## 2026-03-13: Default headless compose provider is now Codex exec
+
+- Context: reply, topic, media, and manual-post composition were hard-wired to Gemini CLI even though the repo needed a clean provider seam for headless drafting.
+- Decision: add a shared compose-model CLI runner with a provider switch, keep the Gemini path intact, and make `codex exec` the default compose provider.
+- Why: this keeps provider-specific process details out of each composer and makes the default match the current local coding-agent stack.
+- Impact: compose flows now default to Codex, `COMPOSE_MODEL_PROVIDER=gemini-cli` restores the older path, and the shared runner can pass prompts over stdin plus attach local images directly to Codex.
+- Follow-up: if we add provider-specific affordances later, keep them inside the shared runner instead of branching each composer again.
+
+## 2026-03-15: Reply final-compose now keeps source-tweet grounding
+
+- Context: the reply flow resolved the original tweet and its analysis before planning, but the final compose prompt only saw a narrow subset of that context plus the retrieved candidate media.
+- Decision: carry the fuller reply subject into final compose and attach the source media when the usage has a local image or playable video file.
+- Why: candidate ranking and line writing both get better when the model can compare against the actual source post instead of a reduced summary.
+- Impact: the reply final-compose step now sees source tweet metadata, richer analysis facets, local source-media paths, and the source media attachment in addition to retrieved candidates.
 
 ## 2026-03-11: Keep topic discovery deterministic and file-backed
 
@@ -118,6 +141,14 @@ Only log things that future contributors are likely to need.
 - Impact: future agents should treat the `stop-slop` review as part of done, alongside tests and docs, and Gemini CLI integrations should reference the skill file in their prompts when prose quality matters.
 - Follow-up: if more Gemini CLI tasks are added, standardize a shared prompt helper for skill loading instead of repeating the file reference.
 
+## 2026-03-13: Manual-post prompts must treat attached media as already visible context
+
+- Context: the manual brief composer could produce posts that wasted most of the tweet re-describing the selected clip or image even when that media would be attached beside the post.
+- Decision: add explicit prompt and cleanup rules that treat selected media as adjacent context, so the text spends its characters on the callback, verdict, or reaction instead of narrating the scene.
+- Why: media-led posts read like slop when the copy duplicates what the viewer can already see, especially in short feed-native formats where every word has to earn its place.
+- Impact: future prompt edits on the manual-post path should preserve the "do not describe the attachment back to the reader" rule, and prompt tests now lock that behavior in.
+- Follow-up: if this failure mode shows up in other compose surfaces, lift the rule into a shared prompt helper instead of fixing each prompt separately.
+
 ## 2026-03-11: Reply-composer asset ideas are stored in a file-backed wishlist with UI and CLI access
 
 - Context: reply composition can surface useful asset targets that are not yet tracked intentionally in the local corpus, such as recognizable templates, people, scene references, public figures, or other visual metaphors.
@@ -165,3 +196,35 @@ Only log things that future contributors are likely to need.
 - Why: this preserves existing robustness and compatibility while giving operators usable `.jpg`, `.png`, `.webp`, `.gif`, `.mp4`, and `.m3u8` files.
 - Impact: future capture changes should treat native-file creation as best-effort and keep bulk repair available through the raw-media backfill task.
 - Follow-up: if capture starts transcoding or normalizing media bytes instead of copying them, extend the backfill path to record richer conversion metadata.
+
+## 2026-03-13: Incremental asset sync should match by media URL before fingerprint similarity
+
+- Context: duplicate detection looked unreliable during iterative asset upserts because some new tweets reused an existing X media URL or request key but still landed as fresh asset rows until a manual rebuild.
+- Decision: make incremental asset sync try shared canonical/source/preview/poster URLs and shared X media request keys before falling back to dHash or embedding-based matching.
+- Why: reposted images and videos often already expose a stable X CDN identity, and that signal is cheaper and more exact than perceptual matching.
+- Impact: operators should need fewer full `media:rebuild` runs just to recover obvious exact duplicates, and the dashboard can more reliably keep duplicate counts current during normal capture flow.
+- Follow-up: if duplicate quality still feels weak after this, inspect threshold tuning for the read-time similarity graph separately from the exact-match upsert path.
+
+## 2026-03-16: Facet search intent matching is now opt-in
+
+- Context: broad one-word searches such as `female` or `celebrity` were being quietly routed and boosted through hard-coded intent logic, which made it hard to tell whether the search corpus itself was good or whether the override was just papering over weak retrieval.
+- Decision: keep the routing/boost logic, but move it behind an explicit `hardMatchMode` flag that defaults to `off` in the API, CLI, and search eval fixtures.
+- Why: search quality work needs an honest baseline. If the default path is supposed to rely on embeddings and the local document corpus, hidden hard matching makes the eval misleading.
+- Impact: broad search quality now depends on the corpus text and general ranking logic by default, while operators can still opt back into `intent` mode when they want that behavior on purpose.
+- Follow-up: keep watching vector participation in the search eval report; many passing queries still lean heavily on lexical ranking.
+
+## 2026-03-16: Pure-vector facet hits should be damped unless lexical evidence also exists
+
+- Context: once the asset-summary Chroma index was refreshed with more semantic search documents, vector retrieval started contributing again, but broad queries like `female`, `celebrity`, and `reaction image` became too eager and let semantically loose neighbors outrank exact lexical matches.
+- Decision: keep the stronger vector normalization, but apply a lower weight to pure-vector rows than to rows that have both vector and lexical support.
+- Why: this preserves semantic recall for exact or concept-heavy searches while avoiding a ranking regime where any vaguely related embedding neighbor can overwhelm short queries.
+- Impact: the current eval keeps `8/8` relevance passes, named/entity queries still show vector participation, and broad queries recover without turning hard-match routing back on.
+- Follow-up: improve vector participation on the broad queries by improving corpus text, not by raising pure-vector weight again.
+
+## 2026-03-16: Broad media retrieval needs explicit archetype language in the indexed documents
+
+- Context: broad queries such as `reaction image`, `product UI`, and `terminal screenshot` were still mostly lexical even after semantic summaries were added, because the indexed documents did not consistently say the reusable archetype out loud.
+- Decision: derive and index `search_archetypes` such as `reaction image`, `reaction clip`, `product UI`, `software screenshot`, `terminal screenshot`, and `dashboard screenshot` from the existing media analysis fields.
+- Why: this improves both embedding retrieval and lexical retrieval without bringing back hidden query-side hard matching.
+- Impact: after focused reindexing, broad reusable-media queries gained meaningful `vec@5` participation in the eval while keeping their relevance thresholds green.
+- Follow-up: if operators add new high-level search concepts, prefer deriving more archetypes from the analysis rather than adding query-specific routing.

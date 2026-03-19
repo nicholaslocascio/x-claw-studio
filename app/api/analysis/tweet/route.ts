@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeAndIndexTweetUsage } from "@/src/server/analysis-pipeline";
+import { logRouteError } from "@/src/server/api-error";
 
 export async function POST(request: Request) {
   try {
@@ -11,8 +12,9 @@ export async function POST(request: Request) {
     const result = await analyzeAndIndexTweetUsage(body.tweetId, body.mediaIndex ?? 0);
     return NextResponse.json(result);
   } catch (error) {
+    const message = logRouteError("analysis/tweet", request, error, "Unknown analysis error");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown analysis error" },
+      { error: message },
       { status: 500 }
     );
   }

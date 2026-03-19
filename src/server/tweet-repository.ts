@@ -1,8 +1,8 @@
-import { getDashboardData } from "@/src/server/data";
+import { getCapturedTweetData } from "@/src/server/data";
 import type { ExtractedTweet } from "@/src/lib/types";
 
 export function findTweetById(tweetId: string): ExtractedTweet | null {
-  const data = getDashboardData();
+  const data = getCapturedTweetData();
   return data.capturedTweets.find((entry) => entry.tweet.tweetId === tweetId)?.tweet ?? null;
 }
 

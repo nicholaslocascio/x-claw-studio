@@ -1,7 +1,7 @@
 import { buildUsageId } from "@/src/lib/usage-id";
 import { analyzeTweetMediaUsage, analyzeTweetMediaUsageWithOptions } from "@/src/server/gemini-analysis";
 import { writeUsageAnalysis } from "@/src/server/analysis-store";
-import { indexUsageAnalysisInChroma } from "@/src/server/chroma-facets";
+import { indexUsageAnalysisInChroma, syncFacetSearchAssetIndex } from "@/src/server/chroma-facets";
 import { readMediaAssetIndex, syncMediaAssetSummaries } from "@/src/server/media-assets";
 import { getDashboardData } from "@/src/server/data";
 import { analyzeMediaAssetVideo, assertVideoWithinAnalysisLimit } from "@/src/server/media-asset-video";
@@ -41,10 +41,15 @@ export async function analyzeAndIndexTweetUsage(tweetId: string, mediaIndex = 0)
   const refreshedAssetIndex = readMediaAssetIndex();
 
   if (refreshedAssetIndex) {
-    syncMediaAssetSummaries({
+    const summarySync = syncMediaAssetSummaries({
       usages: dashboardData.tweetUsages,
       assetIndex: refreshedAssetIndex,
       assetIds: assetId ? [assetId] : []
+    });
+    await syncFacetSearchAssetIndex({
+      summaries: summarySync.file.summaries,
+      usages: dashboardData.tweetUsages,
+      assetIds: summarySync.touchedAssetIds
     });
   }
 

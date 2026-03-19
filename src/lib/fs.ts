@@ -29,7 +29,9 @@ export function slugify(value: string): string {
 
 export function writeJson(filePath: string, data: unknown): void {
   ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  const tempFilePath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tempFilePath, JSON.stringify(data, null, 2));
+  fs.renameSync(tempFilePath, filePath);
 }
 
 export function readText(filePath: string): string {

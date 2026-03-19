@@ -7,6 +7,16 @@ import type { UsageAnalysis } from "@/src/lib/types";
 const projectRoot = process.cwd();
 const analysisDir = path.join(projectRoot, "data", "analysis", "tweet-usages");
 
+function parseUsageAnalysisFile(filePath: string): UsageAnalysis | null {
+  try {
+    return normalizeUsageAnalysis(JSON.parse(fs.readFileSync(filePath, "utf8")) as UsageAnalysis);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[analysis-store] Skipping unreadable usage analysis at ${filePath}: ${message}`);
+    return null;
+  }
+}
+
 export function getAnalysisPath(usageId: string): string {
   return path.join(analysisDir, `${usageId}.json`);
 }
@@ -25,9 +35,7 @@ export function readUsageAnalysis(usageId: string): UsageAnalysis | null {
     return null;
   }
 
-  return normalizeUsageAnalysis(
-    JSON.parse(fs.readFileSync(filePath, "utf8")) as UsageAnalysis
-  );
+  return parseUsageAnalysisFile(filePath);
 }
 
 export function readAllUsageAnalyses(): UsageAnalysis[] {
@@ -38,10 +46,7 @@ export function readAllUsageAnalyses(): UsageAnalysis[] {
   return fs
     .readdirSync(analysisDir)
     .filter((fileName) => fileName.endsWith(".json"))
-    .map((fileName) =>
-      normalizeUsageAnalysis(
-        JSON.parse(fs.readFileSync(path.join(analysisDir, fileName), "utf8")) as UsageAnalysis
-      )
-    )
+    .map((fileName) => parseUsageAnalysisFile(path.join(analysisDir, fileName)))
+    .filter((analysis): analysis is UsageAnalysis => Boolean(analysis))
     .sort((a, b) => a.usageId.localeCompare(b.usageId));
 }

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getAppBaseUrl } from "@/src/lib/env";
+import { logRouteError } from "@/src/server/api-error";
 import { exchangeXAuthorizationCode, getXPkceCookieNames } from "@/src/server/x-auth";
 
 function redirectWithStatus(status: "connected" | "error", message?: string): NextResponse {
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
     });
     return redirectWithStatus("connected");
   } catch (callbackError) {
-    const message = callbackError instanceof Error ? callbackError.message : "X OAuth callback failed";
+    const message = logRouteError("x/oauth/callback", request, callbackError, "X OAuth callback failed");
     return redirectWithStatus("error", message);
   }
 }

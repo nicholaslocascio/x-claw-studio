@@ -217,10 +217,19 @@ async function fetchGroundedTopicNews(topic: TopicClusterRecord): Promise<Ground
   };
 }
 
-export async function getGroundedTopicNews(topics: TopicClusterRecord[]): Promise<Map<string, GroundedTopicNews>> {
+export async function getGroundedTopicNews(
+  topics: TopicClusterRecord[],
+  options?: {
+    refreshIfStale?: boolean;
+  }
+): Promise<Map<string, GroundedTopicNews>> {
   const cache = readGroundedNewsCache();
   const byTopicId = new Map(cache.items.map((item) => [item.topicId, item]));
   if (!isGroundedTopicNewsEnabled()) {
+    return byTopicId;
+  }
+
+  if (options?.refreshIfStale === false) {
     return byTopicId;
   }
 

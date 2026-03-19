@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hammingDistanceHex } from "@/src/server/media-fingerprint";
 import {
+  assetMatchesCandidateByUrl,
   mergeExistingMediaAssetState,
   resolveMediaAssetSyncUsageIds,
   shouldPromoteMediaAssetVideo,
@@ -191,6 +192,37 @@ describe("mergeExistingMediaAssetState", () => {
     expect(merged.promotedVideoSourceUrl).toBe("https://video.twimg.com/example.m3u8");
     expect(merged.promotedVideoFilePath).toBe("data/analysis/media-assets/videos/asset-video.mp4");
     expect(merged.createdAt).toBe(new Date(0).toISOString());
+  });
+});
+
+describe("assetMatchesCandidateByUrl", () => {
+  it("matches existing assets by shared source url before fingerprint fallback", () => {
+    const matched = assetMatchesCandidateByUrl(
+      buildAsset({
+        canonicalMediaUrl: "https://pbs.twimg.com/media/example.jpg",
+        sourceUrls: ["https://pbs.twimg.com/media/example.jpg"],
+        previewUrls: [],
+        posterUrls: []
+      }),
+      ["https://pbs.twimg.com/media/example.jpg"],
+      []
+    );
+
+    expect(matched).toBe(true);
+  });
+
+  it("matches videos by shared request key across source and poster urls", () => {
+    const matched = assetMatchesCandidateByUrl(
+      buildAsset({
+        sourceUrls: ["https://video.twimg.com/amplify_video/1234567890/vid/avc1/1280x720/example.mp4"],
+        previewUrls: [],
+        posterUrls: []
+      }),
+      ["https://pbs.twimg.com/amplify_video_thumb/1234567890/img/example.jpg"],
+      ["1234567890"]
+    );
+
+    expect(matched).toBe(true);
   });
 });
 

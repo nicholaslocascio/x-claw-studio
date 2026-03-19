@@ -6,7 +6,10 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const kindRaw = searchParams.get("kind");
-  const kind = kindRaw === "reply" || kindRaw === "topic_post" || kindRaw === "media_post" ? kindRaw : undefined;
+  const kind =
+    kindRaw === "reply" || kindRaw === "topic_post" || kindRaw === "media_post" || kindRaw === "manual_post" || kindRaw === "clone_tweet"
+      ? kindRaw
+      : undefined;
   const usageId = searchParams.get("usageId");
   const tweetId = searchParams.get("tweetId");
   const topicId = searchParams.get("topicId");

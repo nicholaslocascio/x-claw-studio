@@ -4,7 +4,7 @@ CHROMA_CONTAINER ?= twitter-trend-chroma
 CHROMA_URL ?= http://localhost:8000
 
 .PHONY: help install dev build check lint test test-unit test-integration test-e2e test-all \
-	up stack scheduler daily-poll \
+	up up-dev stack scheduler daily-poll \
 	chroma-up chroma-down chroma-logs chroma-heartbeat \
 	test-live-gemini test-live-chroma test-live-integration test-live-e2e live-all
 
@@ -19,7 +19,8 @@ help:
 	"test-integration       integration test suite (flags/env decide what runs)" \
 	"test-e2e               e2e test suite (flags/env decide what runs)" \
 	"test-all               check + build + unit tests" \
-	"up / stack             run full local stack with auto-restart (Next + scheduler + Chroma)" \
+	"up-dev / dev           run Next.js dev server locally" \
+	"up / stack             run full local stack with auto-restart (production Next + scheduler + Chroma)" \
 	"scheduler              run scheduler polling loop" \
 	"daily-poll             start Chroma and run daily scheduler polling loop" \
 	"chroma-up              start local Chroma on localhost:8000" \
@@ -61,6 +62,8 @@ test-e2e:
 test-all: check build test-unit
 
 up: stack
+
+up-dev: dev
 
 stack:
 	npm run stack

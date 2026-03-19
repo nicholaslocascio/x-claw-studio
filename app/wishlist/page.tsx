@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ReplyMediaWishlist } from "@/src/components/reply-media-wishlist";
-import { getDashboardData } from "@/src/server/data";
+import { getWishlistPageData } from "@/src/server/data";
 
 export default function WishlistPage() {
-  const data = getDashboardData();
+  const data = getWishlistPageData();
 
   return (
     <main className="app-shell">

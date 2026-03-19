@@ -1,28 +1,100 @@
 import Link from "next/link";
-import { ControlPanel } from "@/src/components/control-panel";
-import { CapturedTweetQueue } from "@/src/components/captured-tweet-queue";
-import { FacetSearch } from "@/src/components/facet-search";
-import { ReplyMediaWishlist } from "@/src/components/reply-media-wishlist";
-import { TopicClusters } from "@/src/components/topic-clusters";
-import { UsageQueue } from "@/src/components/usage-queue";
-import { getDashboardData } from "@/src/server/data";
-import { getGroundedTopicNews, isGroundedTopicNewsEnabled } from "@/src/server/topic-grounded-news";
+import { getDashboardOverviewData } from "@/src/server/data";
+import { getGroundedTopicNews } from "@/src/server/topic-grounded-news";
 
-function statLabel(value: number, singular: string, plural = `${singular}s`) {
-  return `${value} ${value === 1 ? singular : plural}`;
+function formatDate(value: string | null | undefined): string {
+  if (!value) {
+    return "No captures yet";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }
 
 export default async function HomePage() {
-  const data = getDashboardData();
-  const groundedNewsByTopicId = await getGroundedTopicNews(data.topicClusters);
+  const data = getDashboardOverviewData();
+  const groundedNewsByTopicId = await getGroundedTopicNews(data.topicClusters, { refreshIfStale: false });
   const latestManifest = data.manifests[0] ?? null;
-  const completedCount = data.tweetUsages.filter((usage) => usage.analysis.status === "complete").length;
-  const pendingCount = data.tweetUsages.length - completedCount;
-  const phashMatchedUsageCount = data.tweetUsages.filter((usage) => usage.phashMatchCount > 0).length;
-  const starredCount = data.tweetUsages.filter((usage) => usage.mediaAssetStarred).length;
-  const textOnlyTweetCount = data.capturedTweets.filter((entry) => !entry.hasMedia).length;
-  const tweetsWithMediaCount = data.capturedTweets.length - textOnlyTweetCount;
+  const runningRuns = data.runHistory.filter((run) => run.status === "running");
+  const activeRefreshRuns = runningRuns.filter((run) =>
+    run.task === "analyze_missing" ||
+    run.task === "analyze_topics" ||
+    run.task === "rebuild_media_assets" ||
+    run.task === "backfill_media_native_types"
+  );
+  const analyzeMissingRun = runningRuns.find((run) => run.task === "analyze_missing") ?? null;
+  const pendingCount = data.pendingUsageCount;
+  const completedCount = data.completedUsageCount;
+  const repeatedUsageCount = data.repeatedAssetUsageCount;
+  const starredCount = data.starredUsageCount;
   const freshTopicCount = data.topicClusters.filter((topic) => !topic.isStale).length;
+  const groundedTopicCount = data.topicClusters.filter((topic) => groundedNewsByTopicId.get(topic.topicId)).length;
+  const failedRunCount = data.runHistory.filter((run) => run.status === "failed").length;
+  const wishlistPendingCount = data.replyMediaWishlist.filter((entry) => entry.status === "pending").length;
+  const priorityCards = [
+    {
+      href: "/queue",
+      kicker: "Review",
+      title: "Review media",
+      description: "Inspect saved assets, spot repeats, and decide what to analyze or reuse.",
+      cta: "Open review",
+      chips: [`${pendingCount} pending`, `${starredCount} starred`]
+    },
+    {
+      href: "/replies",
+      kicker: "Compose",
+      title: "Write a reply",
+      description: "Load a tweet, review the context, and draft a response without leaving the app.",
+      cta: "Open compose",
+      chips: ["reply and post tools", `${data.totalTweetCount} tweets ready for reuse`]
+    },
+    {
+      href: "/control",
+      kicker: "Capture",
+      title: "Capture latest timeline",
+      description: "Pull in fresh tweets, media, and run updates from one control surface.",
+      cta: "Open capture",
+      chips: [runningRuns.length > 0 ? `${runningRuns.length} running now` : `${data.runHistory.length} runs logged`, latestManifest ? "capture ready" : "no capture yet"]
+    },
+    {
+      href: "/topics",
+      kicker: "Research",
+      title: "Explore topics",
+      description: "See what themes are active and turn them into ideas worth posting into now.",
+      cta: "Open topics",
+      chips: [`${freshTopicCount} fresh`, `${groundedTopicCount} with news context`]
+    }
+  ];
+
+  const continueCards = [
+    {
+      href: "/queue",
+      title: "Media review",
+      description:
+        analyzeMissingRun
+          ? "Fresh capture is still being analyzed in the background."
+          : pendingCount > 0
+            ? "Start with the items still waiting for review."
+            : "The queue is clear. Check repeated assets or search for reusable media.",
+      meta: analyzeMissingRun ? `analysis started ${formatDate(analyzeMissingRun.startedAt)}` : pendingCount > 0 ? `${pendingCount} still need attention` : `${completedCount} already analyzed`
+    },
+    {
+      href: "/replies",
+      title: "Compose",
+      description: "Jump back into reply drafting or start a new post from notes.",
+      meta: `${data.totalTweetCount} saved tweets available`
+    },
+    {
+      href: "/control",
+      title: "Latest capture",
+      description: latestManifest
+        ? "Open capture and runs to inspect the last import, schedule, or recent failures."
+        : "Set up your first capture run and bring in fresh tweets.",
+      meta: latestManifest ? latestManifest.runId : "No manifest available"
+    }
+  ];
 
   return (
     <main className="app-shell">
@@ -32,265 +104,233 @@ export default async function HomePage() {
       <section className="relative z-10 mb-6 terminal-window">
         <div className="window-bar">
           <div>
-            <div className="section-kicker">Twitter Trend Lab</div>
-            <div className="type-cursor mt-2 font-[family:var(--font-label)] text-[10px] uppercase tracking-[0.18em] text-muted">
-              &gt; Capture, inspect, and promote local media usages
-            </div>
+            <div className="section-kicker">Home</div>
+            <div className="type-cursor mt-2 text-sm text-muted">A clear starting point for capture, review, writing, and research.</div>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <Link href="/tweets" className="tt-button">
-              <span>Tweets</span>
+            <Link href="/control" className="tt-link">
+              <span>Capture</span>
             </Link>
-            <Link href="/replies" className="tt-button">
-              <span>Replies</span>
+            <Link href="/queue" className="tt-button">
+              <span>Review</span>
             </Link>
-            <Link href="/matches" className="tt-button">
-              <span>Matches</span>
+            <Link href="/replies" className="tt-link">
+              <span>Compose</span>
             </Link>
-            <Link href="/wishlist" className="tt-button">
-              <span>Wishlist</span>
-            </Link>
-            <Link href="/drafts" className="tt-button">
-              <span>Drafts</span>
-            </Link>
-            <Link href="/topics" className="tt-button">
-              <span>Topics</span>
-            </Link>
-            <a href="#run-control" className="tt-link">
-              <span>Run Control</span>
-            </a>
-            <a href="#usage-queue" className="tt-link">
-              <span>Queue</span>
-            </a>
-            <a href="#facet-search" className="tt-link">
-              <span>Search</span>
-            </a>
           </div>
         </div>
-        <div className="panel-body">
-          <div className="hero-panel">
-            <div className="space-y-4">
-              <div className="tt-subpanel">
-                <div className="tt-chip tt-chip-accent">Local-first workflow</div>
-                <h1 className="hero-title mt-4">Run captures, triage the queue, and inspect repeated media faster.</h1>
-                <p className="hero-copy mt-4">
-                  The app is strongest when it helps you move through three decisions in order: trigger a crawl,
-                  find what still needs attention, and inspect clusters that repeat across posts.
-                </p>
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <a href="#run-control" className="tt-button">
-                    <span>Start a run</span>
-                  </a>
-                  <a href="#usage-queue" className="tt-link">
-                    <span>Review queue</span>
-                  </a>
-                  <Link href="/tweets" className="tt-link">
-                    <span>Browse tweets</span>
-                  </Link>
-                  <Link href="/replies" className="tt-link">
-                    <span>Open reply lab</span>
-                  </Link>
-                  <Link href="/wishlist" className="tt-link">
-                    <span>Open wishlist</span>
-                  </Link>
-                  <Link href="/drafts" className="tt-link">
-                    <span>Open drafts</span>
-                  </Link>
-                  <Link href="/topics" className="tt-link">
-                    <span>Open topics</span>
-                  </Link>
-                  <Link href="/matches" className="tt-link">
-                    <span>Open match explorer</span>
+        <div className="panel-body space-y-6">
+          {data.xAuthWarning ? (
+            <div className="tt-subpanel border-orange/60 bg-orange/10">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="tt-chip tt-chip-danger">X connection needs attention</div>
+                  <p className="mt-3 text-base leading-7 text-slate-100">
+                    {data.xAuthWarning.reason}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {data.xAuthWarning.task} failed {formatDate(data.xAuthWarning.startedAt)}.
+                  </p>
+                </div>
+                <Link href="/control#x-auth" className="tt-button">
+                  <span>Fix X access</span>
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
+          {activeRefreshRuns.length > 0 ? (
+            <div className="tt-subpanel border-accent/50 bg-accent/10">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="tt-chip tt-chip-accent">Background refresh running</div>
+                  <p className="mt-3 text-base leading-7 text-slate-100">
+                    New tweets are in. Analysis and topic refresh are still catching up, so pending counts can stay high for a bit.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {activeRefreshRuns.slice(0, 3).map((run) => (
+                    <span key={run.runControlId} className="tt-chip">
+                      {run.task} · {formatDate(run.startedAt)}
+                    </span>
+                  ))}
+                  <Link href="/control" className="tt-button">
+                    <span>Open runs</span>
                   </Link>
                 </div>
               </div>
+            </div>
+          ) : null}
 
-              <div className="grid gap-3 md:grid-cols-3">
-                <article className="metric-card">
-                  <div className="tt-data-label">1. Capture</div>
-                  <h2 className="mt-3 text-lg font-semibold text-slate-100">Trigger a crawl or capture the current tab.</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">Use run control when you need fresh data or a one-off current page snapshot.</p>
-                </article>
-                <article className="metric-card">
-                  <div className="tt-data-label">2. Triage</div>
-                  <h2 className="mt-3 text-lg font-semibold text-slate-100">Filter the queue down to pending, matched, or starred assets.</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">Search by author or tweet text, then expand only the items that need analysis.</p>
-                </article>
-                <article className="metric-card">
-                  <div className="tt-data-label">3. Inspect</div>
-                  <h2 className="mt-3 text-lg font-semibold text-slate-100">Jump into detailed usage pages when repeats matter.</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">Open matches for cluster-level review and similarity context.</p>
-                </article>
+          <section className="hero-panel items-start">
+            <div className="tt-subpanel">
+              <div className="tt-chip tt-chip-accent">Start here</div>
+              <h1 className="hero-title mt-4">What do you want to work on?</h1>
+              <p className="hero-copy mt-4">
+                Capture tweets, review saved media, draft posts, or explore active topics from one place.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link href="/queue" className="tt-button">
+                  <span>Review media</span>
+                </Link>
+                <Link href="/replies" className="tt-link">
+                  <span>Write a reply</span>
+                </Link>
+                <Link href="/control" className="tt-link">
+                  <span>Capture latest timeline</span>
+                </Link>
+                <Link href="/search" className="tt-link">
+                  <span>Search media</span>
+                </Link>
               </div>
             </div>
 
             <div className="dashboard-stat-grid">
               <div className="metric-card">
-                <div className="tt-data-label">Pending Media</div>
-                <div className="mt-3 font-[family:var(--font-heading)] text-3xl font-black uppercase tracking-[0.08em] text-accent">
-                  {pendingCount}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">{statLabel(pendingCount, "usage")} awaiting analysis.</p>
+                <div className="tt-data-label">Pending review</div>
+                <div className="metric-number mt-3 text-accent">{pendingCount}</div>
+                <p className="mt-2 text-sm leading-6 text-slate-300">Saved media still waiting for review.</p>
               </div>
               <div className="metric-card">
-                <div className="tt-data-label">Complete</div>
-                <div className="mt-3 font-[family:var(--font-heading)] text-3xl font-black uppercase tracking-[0.08em] text-cyan">
-                  {completedCount}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Analyzed and ready for retrieval.</p>
+                <div className="tt-data-label">Analyzed</div>
+                <div className="metric-number mt-3 text-cyan">{completedCount}</div>
+                <p className="mt-2 text-sm leading-6 text-slate-300">Items already analyzed.</p>
               </div>
               <div className="metric-card">
-                <div className="tt-data-label">Similarity Hits</div>
-                <div className="mt-3 font-[family:var(--font-heading)] text-3xl font-black uppercase tracking-[0.08em] text-magenta">
-                  {phashMatchedUsageCount}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Usages tied to visually similar assets.</p>
+                <div className="tt-data-label">Repeated assets</div>
+                <div className="metric-number mt-3 text-slate-100">{repeatedUsageCount}</div>
+                <p className="mt-2 text-sm leading-6 text-slate-300">Assets with repeat or similarity signals.</p>
               </div>
               <div className="metric-card">
-                <div className="tt-data-label">Starred</div>
-                <div className="mt-3 font-[family:var(--font-heading)] text-3xl font-black uppercase tracking-[0.08em] text-slate-100">
-                  {starredCount}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Assets flagged for follow-up.</p>
-              </div>
-              <div className="metric-card">
-                <div className="tt-data-label">Text-Only Tweets</div>
-                <div className="mt-3 font-[family:var(--font-heading)] text-3xl font-black uppercase tracking-[0.08em] text-orange">
-                  {textOnlyTweetCount}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Saved from crawl, excluded from media analysis.</p>
-              </div>
-              <div className="metric-card">
-                <div className="tt-data-label">Fresh Topics</div>
-                <div className="mt-3 font-[family:var(--font-heading)] text-3xl font-black uppercase tracking-[0.08em] text-lime-300">
-                  {freshTopicCount}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Clusters still worth posting into.</p>
+                <div className="tt-data-label">Fresh topics</div>
+                <div className="metric-number mt-3 text-lime-300">{freshTopicCount}</div>
+                <p className="mt-2 text-sm leading-6 text-slate-300">Themes that still look timely.</p>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="surface-divider mt-6 pt-6">
-            <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto]">
-              <div className="tt-subpanel-soft">
-                <div className="tt-data-label">Latest Crawl Run</div>
-                <div className="mt-3 break-all font-[family:var(--font-mono)] text-xs uppercase tracking-[0.12em] text-slate-100">
-                  {latestManifest?.runId ?? "none"}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-                  {data.totalTweetCount} tweets indexed across {data.manifests.length} cached runs. {tweetsWithMediaCount} include media.
-                </p>
-              </div>
-              <div className="tt-subpanel-soft">
-                <div className="tt-data-label">Next Move</div>
-                <p className="mt-3 text-sm leading-6 text-slate-200">
-                  {pendingCount > 0 ? "Open the queue and analyze pending usages." : "Use the match explorer to inspect repeated assets."}
-                </p>
-              </div>
-              <div className="tt-subpanel-soft">
-                <div className="tt-data-label">Data Source</div>
-                <p className="mt-3 text-sm leading-6 text-slate-200">Dashboard reads directly from local JSON artifacts in `data/`.</p>
+          <section className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="tt-subpanel-soft">
+              <div className="tt-data-label">Suggested next step</div>
+              <p className="mt-3 text-base leading-7 text-slate-200">
+                {analyzeMissingRun
+                  ? "Analysis is still running in the background. Open capture if you want the live job list and logs."
+                  : pendingCount > 0
+                    ? "Start with media review. There are still items waiting for analysis."
+                    : "The review queue is clear. Search media, explore topics, or continue drafting."}
+              </p>
+            </div>
+            <div className="tt-subpanel-soft">
+              <div className="tt-data-label">System status</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="tt-chip">{data.totalTweetCount} saved tweets</span>
+                <span className="tt-chip">{data.indexedAssetUsageCount} indexed assets</span>
+                <span className={`tt-chip ${runningRuns.length > 0 ? "tt-chip-accent" : ""}`}>{runningRuns.length} running jobs</span>
+                <span className="tt-chip">{failedRunCount} failed runs</span>
+                <span className="tt-chip">{wishlistPendingCount} wishlist items</span>
               </div>
             </div>
-          </div>
+          </section>
         </div>
       </section>
-
-      <ControlPanel schedulerConfig={data.schedulerConfig} runHistory={data.runHistory} />
-
-      <div id="usage-queue" className="relative z-10 mb-8">
-        <UsageQueue usages={data.tweetUsages} />
-      </div>
-
-      <TopicClusters
-        topics={data.topicClusters.map((topic) => ({
-          ...topic,
-          groundedNews: groundedNewsByTopicId.get(topic.topicId) ?? null
-        }))}
-        groundedNewsEnabled={isGroundedTopicNewsEnabled()}
-        draftTopicBasePath="/topics"
-      />
-
-      <CapturedTweetQueue tweets={data.capturedTweets} />
-
-      <div id="facet-search">
-        <FacetSearch />
-      </div>
-
-      <ReplyMediaWishlist entries={data.replyMediaWishlist} />
 
       <section className="relative z-10 mb-8 terminal-panel">
         <div className="panel-body">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="section-kicker">Pipeline View</div>
-              <h2 className="section-title mt-2">Capture. Promote. Analyze.</h2>
+              <div className="section-kicker">Needs attention</div>
+              <h2 className="section-title mt-3">What needs attention right now</h2>
+              <p className="page-intro mt-3 max-w-3xl">
+                These are the places where the app can unblock you fastest.
+              </p>
             </div>
-            <div className="tt-chip tt-chip-accent">{completedCount} complete</div>
           </div>
-          <div className="grid gap-3 lg:grid-cols-3">
-            <article className="neon-card">
-              <div className="section-kicker">Stage 1</div>
-              <h3 className="mt-3 font-[family:var(--font-heading)] text-lg font-bold uppercase tracking-[0.14em] text-accent">
-                Capture
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                Preserve tweet HTML, author context, media URLs, previews, and platform metrics.
-              </p>
-            </article>
-            <article className="neon-card">
-              <div className="section-kicker">Stage 2</div>
-              <h3 className="mt-3 font-[family:var(--font-heading)] text-lg font-bold uppercase tracking-[0.14em] text-magenta">
-                Promotion
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                Keep storage light until an asset repeats enough to justify deeper processing.
-              </p>
-            </article>
-            <article className="neon-card">
-              <div className="section-kicker">Stage 3</div>
-              <h3 className="mt-3 font-[family:var(--font-heading)] text-lg font-bold uppercase tracking-[0.14em] text-cyan">
-                Analysis
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                Fill semantic facets for retrieval, grouping, and triage across the saved usage set.
-              </p>
-            </article>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            {priorityCards.map((card) => (
+              <article key={card.href} className="priority-card">
+                <div>
+                  <div className="section-kicker">{card.kicker}</div>
+                  <h3 className="card-title mt-3">{card.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-300">{card.description}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {card.chips.map((chip) => (
+                      <span key={`${card.href}-${chip}`} className="tt-chip">
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <Link href={card.href} className="tt-button">
+                  <span>{card.cta}</span>
+                </Link>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="relative z-10 mt-8 terminal-panel">
+      <section className="relative z-10 mb-8 terminal-panel">
         <div className="panel-body">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="section-kicker">Crawl Runs</div>
-              <h2 className="section-title mt-2">Raw timeline manifests</h2>
+              <div className="section-kicker">Continue</div>
+              <h2 className="section-title mt-3">Pick up where you left off</h2>
+              <p className="page-intro mt-3 max-w-3xl">
+                Use these shortcuts when you already know the workflow you want.
+              </p>
             </div>
-            <div className="tt-chip">{data.manifests.length} runs cached</div>
           </div>
-          <div className="grid gap-3 lg:grid-cols-2">
-            {data.manifests.length === 0 ? (
-              <article className="neon-card">
-                <div className="tt-placeholder">No crawl manifests yet. Run `npm run crawl:x-api` to pull the home timeline through the X API.</div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {continueCards.map((card) => (
+              <article key={card.href} className="summary-card">
+                <div className="tt-data-label">{card.title}</div>
+                <p className="mt-3 text-sm leading-7 text-slate-200">{card.description}</p>
+                <div className="mt-4 text-sm text-slate-400">{card.meta}</div>
+                <div className="mt-4">
+                  <Link href={card.href} className="tt-link">
+                    <span>Open</span>
+                  </Link>
+                </div>
               </article>
-            ) : (
-              data.manifests.map((manifest) => (
-                <article key={manifest.runId} className="neon-card">
-                  <div className="section-kicker">Run</div>
-                  <h3 className="mt-2 break-all font-[family:var(--font-mono)] text-[10px] uppercase tracking-[0.14em] text-cyan">
-                    {manifest.runId}
-                  </h3>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    <span className="tt-chip">{manifest.capturedTweets.length} tweets</span>
-                    <span className="tt-chip">{manifest.interceptedMedia.length} intercepted</span>
-                    <span className={`tt-chip ${manifest.downloadVideos ? "tt-chip-accent" : "tt-chip-warning"}`}>
-                      videos {manifest.downloadVideos ? "enabled" : "deferred"}
-                    </span>
-                  </div>
-                </article>
-              ))
-            )}
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 mb-8 terminal-panel">
+        <div className="panel-body">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="section-kicker">System status</div>
+              <h2 className="section-title mt-3">A quick read on the local workspace</h2>
+              <p className="page-intro mt-3 max-w-3xl">
+                Enough context to know whether the local data is fresh and where it came from.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
+            <div className="tt-subpanel-soft">
+              <div className="tt-data-label">Latest capture</div>
+              <div className="mt-3 break-all font-[family:var(--font-mono)] text-xs tracking-[0.12em] text-slate-100">
+                {latestManifest?.runId ?? "No manifest available"}
+              </div>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                {data.totalTweetCount} saved tweets across {data.manifests.length} capture runs. {data.tweetsWithMediaCount} include media and {data.textOnlyTweetCount} are text only.
+              </p>
+            </div>
+            <div className="tt-subpanel-soft">
+              <div className="tt-data-label">Recent writing</div>
+              <p className="mt-3 text-sm leading-7 text-slate-200">
+                Reply and post tools are ready whenever you want to turn saved context into a draft.
+              </p>
+            </div>
+            <div className="tt-subpanel-soft">
+              <div className="tt-data-label">Storage</div>
+              <p className="mt-3 text-sm leading-7 text-slate-200">All data is read from local files under <code>data/</code>.</p>
+            </div>
           </div>
         </div>
       </section>

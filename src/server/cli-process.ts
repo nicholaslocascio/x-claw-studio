@@ -13,13 +13,14 @@ export async function runCliCommand(input: {
   args: string[];
   cwd: string;
   env?: NodeJS.ProcessEnv;
+  stdin?: string;
   timeoutMs?: number;
 }): Promise<CliCommandResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(input.command, input.args, {
       cwd: input.cwd,
       env: input.env ?? process.env,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"]
     });
 
     let stdout = "";
@@ -35,6 +36,12 @@ export async function runCliCommand(input: {
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
+    if (typeof input.stdin === "string") {
+      child.stdin.setDefaultEncoding("utf8");
+      child.stdin.end(input.stdin);
+    } else {
+      child.stdin.end();
+    }
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
     });

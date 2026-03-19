@@ -23,7 +23,7 @@ const DEFAULT_MEDIA_FIELDS = [
   "url",
   "variants"
 ].join(",");
-const DEFAULT_USER_FIELDS = ["id", "name", "profile_image_url", "username"].join(",");
+const DEFAULT_USER_FIELDS = ["id", "name", "profile_image_url", "public_metrics", "username"].join(",");
 const DEFAULT_EXPANSIONS = ["attachments.media_keys", "author_id"].join(",");
 
 interface XApiPublicMetrics {
@@ -54,6 +54,9 @@ interface XApiUser {
   name?: string;
   username?: string;
   profile_image_url?: string;
+  public_metrics?: {
+    followers_count?: number;
+  };
 }
 
 interface XApiMediaVariant {
@@ -97,6 +100,10 @@ interface XApiUsersMeResponse {
   data?: XApiUser;
 }
 
+interface XApiUserLookupResponse {
+  data?: XApiUser;
+}
+
 interface XApiErrorBody {
   title?: string;
   detail?: string;
@@ -132,6 +139,22 @@ export interface LookupXPostByIdResult {
   tweet: ExtractedTweet | null;
 }
 
+export interface LookupXUserByUsernameResult {
+  user: XApiUser | null;
+}
+
+export interface FetchXUserTweetsInput {
+  userId: string;
+  username?: string | null;
+  maxResults: number;
+  sinceId?: string | null;
+}
+
+export interface FetchXUserTweetsResult {
+  userId: string;
+  tweets: ExtractedTweet[];
+}
+
 let cachedAuthenticatedUser: XApiUser | null = null;
 
 function formatXApiError(
@@ -142,7 +165,11 @@ function formatXApiError(
   const pieces = [body?.title, body?.detail].filter(Boolean);
   let message = pieces.length > 0 ? pieces.join(": ") : `X API request failed with status ${status}`;
 
-  if (pathname.includes("/reverse_chronological")) {
+  const detail = `${body?.title ?? ""} ${body?.detail ?? ""}`;
+  if (
+    pathname.includes("/reverse_chronological") &&
+    /user-context token|application-only|oauth|unauthorized/i.test(detail)
+  ) {
     message +=
       ". Home timeline access needs a user-context token. The current token appears to be application-only. Set X_BEARER_TOKEN to an OAuth 1.0a or OAuth 2.0 user-context token with reverse chronological timeline access.";
   }
@@ -256,10 +283,12 @@ function mapTweet(
     sourceName,
     tweetId: tweet.id ?? null,
     tweetUrl: tweet.id ? buildTweetUrl(tweet.id, author?.username) : null,
+    authorUserId: author?.id ?? tweet.author_id ?? null,
     authorHandle: author?.username ? `@${author.username}` : null,
     authorUsername: author?.username ?? null,
     authorDisplayName: author?.name ?? null,
     authorProfileImageUrl: author?.profile_image_url ?? null,
+    authorFollowerCount: author?.public_metrics?.followers_count ?? null,
     createdAt: tweet.created_at ?? null,
     text: tweet.note_tweet?.text ?? tweet.text ?? null,
     metrics: {
@@ -380,4 +409,63 @@ export async function lookupXPostById(tweetId: string): Promise<LookupXPostByIdR
   const tweet = response.data ? mapTweet(response.data, response.includes, "x-api-post-lookup", 0) : null;
 
   return { tweet };
+}
+
+export async function lookupXUserByUsername(username: string): Promise<LookupXUserByUsernameResult> {
+  const normalized = username.trim().replace(/^@/, "");
+  if (!normalized) {
+    return { user: null };
+  }
+
+  const params = new URLSearchParams();
+  params.set("user.fields", DEFAULT_USER_FIELDS);
+  const response = await xApiGet<XApiUserLookupResponse>(`/2/users/by/username/${normalized}`, params);
+  return {
+    user: response.data ?? null
+  };
+}
+
+export async function fetchXUserTweets(input: FetchXUserTweetsInput): Promise<FetchXUserTweetsResult> {
+  const maxResults = Math.max(5, Math.min(100, input.maxResults));
+  const tweets: ExtractedTweet[] = [];
+  const seenTweetIds = new Set<string>();
+  let nextToken: string | null = null;
+  let pageIndex = 0;
+
+  while (pageIndex < 10) {
+    const params = createDefaultParams();
+    params.set("max_results", String(maxResults));
+    params.set("exclude", "replies,retweets");
+    if (input.sinceId) {
+      params.set("since_id", input.sinceId);
+    }
+    if (nextToken) {
+      params.set("pagination_token", nextToken);
+    }
+
+    const response = await xApiGet<XApiTimelineResponse>(`/2/users/${input.userId}/tweets`, params);
+    const mappedTweets = (response.data ?? []).map((tweet, index) =>
+      mapTweet(tweet, response.includes, `x-api-user-tweets:${input.username ?? input.userId}`, pageIndex * maxResults + index)
+    );
+
+    for (const tweet of mappedTweets) {
+      if (!tweet.tweetId || seenTweetIds.has(tweet.tweetId)) {
+        continue;
+      }
+
+      seenTweetIds.add(tweet.tweetId);
+      tweets.push(tweet);
+    }
+
+    nextToken = response.meta?.next_token ?? null;
+    pageIndex += 1;
+    if (!nextToken) {
+      break;
+    }
+  }
+
+  return {
+    userId: input.userId,
+    tweets
+  };
 }

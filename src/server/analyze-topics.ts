@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { getDashboardData } from "@/src/server/data";
 import { indexTopicAnalysisInChroma } from "@/src/server/chroma-facets";
 import { analyzeTweetTopicsWithGemini } from "@/src/server/gemini-topic-analysis";
+import { listPriorityAccountUsernames } from "@/src/server/priority-accounts";
 import { buildTopicAnalysisId, readAllTopicAnalyses, writeTopicAnalysis } from "@/src/server/topic-analysis-store";
 import { buildTopicIndex, writeTopicIndex } from "@/src/server/tweet-topics";
 
@@ -95,10 +96,12 @@ export async function analyzeTopics(input: {
   }
 
   const allAnalyses = readAllTopicAnalyses();
+  const priorityAuthorUsernames = listPriorityAccountUsernames();
   const topicIndex = buildTopicIndex({
     tweets: data.capturedTweets.map((entry) => entry.tweet),
     usages: data.tweetUsages,
-    topicAnalyses: allAnalyses
+    topicAnalyses: allAnalyses,
+    priorityAuthorUsernames
   });
   writeTopicIndex(topicIndex);
 

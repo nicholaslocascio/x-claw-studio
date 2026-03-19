@@ -4,10 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
+import { parseComposeJsonResponse, runComposePrompt } from "@/src/server/compose-model-cli";
 import { buildReplyCompositionCleanupPrompt, buildReplyCompositionPlanPrompt, buildReplyCompositionPrompt } from "@/src/server/reply-composer-prompt";
 import { buildTopicPostCleanupPrompt, buildTopicPostPlanPrompt, buildTopicPostPrompt } from "@/src/server/topic-composer-prompt";
 import { buildMediaPostCleanupPrompt, buildMediaPostPlanPrompt, buildMediaPostPrompt } from "@/src/server/media-post-composer-prompt";
-import { parseGeminiJsonResponse, runGeminiPrompt } from "@/src/server/gemini-cli-json";
 import { replyCompositionDraftSchema, replyCompositionPlanSchema } from "@/src/lib/reply-composer";
 import { topicPostDraftSchema, topicPostPlanSchema } from "@/src/lib/topic-composer";
 import { mediaPostDraftSchema, mediaPostPlanSchema } from "@/src/lib/media-post-composer";
@@ -30,6 +30,8 @@ interface ReplyFixture {
     createdAt: string | null;
     tweetText: string;
     mediaKind: string;
+    localFilePath: null;
+    playableFilePath: null;
     analysis: {
       captionBrief: null;
       sceneDescription: null;
@@ -362,6 +364,8 @@ function buildReplyFixture(spec: ReplyFixtureSpec): ReplyFixture {
       createdAt: subjectTweet.createdAt,
       tweetText: subjectTweet.tweetText,
       mediaKind: "none",
+      localFilePath: null,
+      playableFilePath: null,
       analysis: {
         captionBrief: null,
         sceneDescription: null,
@@ -450,17 +454,17 @@ async function runReplyCase(selectedFixtureId?: string) {
   for (const fixture of filteredFixtures) {
     process.stderr.write(`[eval-compose-quality] reply fixture ${fixture.id}\n`);
     try {
-      const plan = parseGeminiJsonResponse(
-        await runGeminiPrompt(buildReplyCompositionPlanPrompt({ request: fixture.request, subject: fixture.subject })),
+      const plan = parseComposeJsonResponse(
+        await runComposePrompt({ prompt: buildReplyCompositionPlanPrompt({ request: fixture.request, subject: fixture.subject }) }),
         (value) => replyCompositionPlanSchema.parse(normalizeReplyPlan(value))
       );
-      const draft = parseGeminiJsonResponse(
-        await runGeminiPrompt(buildReplyCompositionPrompt({ request: fixture.request, subject: fixture.subject, plan, candidates: [] })),
+      const draft = parseComposeJsonResponse(
+        await runComposePrompt({ prompt: buildReplyCompositionPrompt({ request: fixture.request, subject: fixture.subject, plan, candidates: [] }) }),
         (value) => replyCompositionDraftSchema.parse(value)
       );
       const cleaned = normalizeDraftStrings(
-        parseGeminiJsonResponse(
-          await runGeminiPrompt(buildReplyCompositionCleanupPrompt({ request: fixture.request, subject: fixture.subject, plan, draft })),
+        parseComposeJsonResponse(
+          await runComposePrompt({ prompt: buildReplyCompositionCleanupPrompt({ request: fixture.request, subject: fixture.subject, plan, draft }) }),
           (value) => replyCompositionDraftSchema.parse(value)
         )
       );
@@ -531,14 +535,14 @@ async function runTopicCase() {
     }
   };
 
-  const plan = parseGeminiJsonResponse(await runGeminiPrompt(buildTopicPostPlanPrompt({ request, subject })), (value) =>
+  const plan = parseComposeJsonResponse(await runComposePrompt({ prompt: buildTopicPostPlanPrompt({ request, subject }) }), (value) =>
     topicPostPlanSchema.parse(normalizeTopicPlan(value))
   );
-  const draft = parseGeminiJsonResponse(await runGeminiPrompt(buildTopicPostPrompt({ request, subject, plan, candidates: [] })), (value) =>
+  const draft = parseComposeJsonResponse(await runComposePrompt({ prompt: buildTopicPostPrompt({ request, subject, plan, candidates: [] }) }), (value) =>
     topicPostDraftSchema.parse(normalizeTopicDraft(value))
   );
   const cleaned = normalizeDraftStrings(
-    parseGeminiJsonResponse(await runGeminiPrompt(buildTopicPostCleanupPrompt({ request, subject, plan, draft })), (value) =>
+    parseComposeJsonResponse(await runComposePrompt({ prompt: buildTopicPostCleanupPrompt({ request, subject, plan, draft }) }), (value) =>
       topicPostDraftSchema.parse(normalizeTopicDraft(value))
     )
   );
@@ -595,14 +599,14 @@ async function runMediaCase() {
     priorUsages: []
   };
 
-  const plan = parseGeminiJsonResponse(await runGeminiPrompt(buildMediaPostPlanPrompt({ request, subject })), (value) =>
+  const plan = parseComposeJsonResponse(await runComposePrompt({ prompt: buildMediaPostPlanPrompt({ request, subject }) }), (value) =>
     mediaPostPlanSchema.parse(normalizeMediaPlan(value))
   );
-  const draft = parseGeminiJsonResponse(await runGeminiPrompt(buildMediaPostPrompt({ request, subject, plan, candidates: [] })), (value) =>
+  const draft = parseComposeJsonResponse(await runComposePrompt({ prompt: buildMediaPostPrompt({ request, subject, plan, candidates: [] }) }), (value) =>
     mediaPostDraftSchema.parse(value)
   );
   const cleaned = normalizeDraftStrings(
-    parseGeminiJsonResponse(await runGeminiPrompt(buildMediaPostCleanupPrompt({ request, subject, plan, draft })), (value) =>
+    parseComposeJsonResponse(await runComposePrompt({ prompt: buildMediaPostCleanupPrompt({ request, subject, plan, draft }) }), (value) =>
       mediaPostDraftSchema.parse(value)
     )
   );

@@ -17,9 +17,12 @@ export const replyCompositionRequestSchema = z.object({
   goal: z.enum(REPLY_COMPOSITION_GOALS).default("insight"),
   mode: z.enum(["single", "all_goals"]).default("single"),
   maxConcurrency: z.coerce.number().int().min(1).max(REPLY_COMPOSITION_GOALS.length).optional(),
-  toneHint: z.string().trim().max(120).optional(),
-  angleHint: z.string().trim().max(280).optional(),
-  constraints: z.string().trim().max(280).optional()
+  toneHint: z.string().trim().optional(),
+  angleHint: z.string().trim().optional(),
+  constraints: z.string().trim().optional(),
+  revisionFeedback: z.string().trim().optional(),
+  revisionOriginalReplyText: z.string().trim().optional(),
+  revisionSelectedMediaContext: z.string().trim().optional()
 }).superRefine((value, ctx) => {
   if (!value.usageId && !value.tweetId) {
     ctx.addIssue({
@@ -39,24 +42,24 @@ export type ReplySourceLookupRequest = z.infer<typeof replySourceLookupRequestSc
 
 export const replyCompositionPlanSchema = z.object({
   stance: z.enum(["agree", "disagree", "mixed"]),
-  angle: z.string().min(1).max(240),
-  tone: z.string().min(1).max(120),
-  intentSummary: z.string().min(1).max(240),
-  targetEffect: z.string().min(1).max(240),
-  searchQueries: z.array(z.string().min(1).max(160)).min(2).max(4),
-  moodKeywords: z.array(z.string().min(1).max(60)).min(2).max(8),
-  candidateSelectionCriteria: z.array(z.string().min(1).max(160)).min(2).max(6),
-  avoid: z.array(z.string().min(1).max(160)).max(6)
+  angle: z.string().min(1),
+  tone: z.string().min(1),
+  intentSummary: z.string().min(1),
+  targetEffect: z.string().min(1),
+  searchQueries: z.array(z.string().min(1)).min(2),
+  moodKeywords: z.array(z.string().min(1)).min(2),
+  candidateSelectionCriteria: z.array(z.string().min(1)).min(2),
+  avoid: z.array(z.string().min(1))
 });
 
 export type ReplyCompositionPlan = z.infer<typeof replyCompositionPlanSchema>;
 
 export const replyCompositionDraftSchema = z.object({
-  replyText: z.string().min(1).max(280),
+  replyText: z.string().min(1),
   selectedCandidateId: z.string().min(1).nullable(),
-  mediaSelectionReason: z.string().min(1).max(400),
-  whyThisReplyWorks: z.string().min(1).max(400),
-  postingNotes: z.string().min(1).max(400).nullable()
+  mediaSelectionReason: z.string().min(1),
+  whyThisReplyWorks: z.string().min(1),
+  postingNotes: z.string().min(1).nullable()
 });
 
 export type ReplyCompositionDraft = z.infer<typeof replyCompositionDraftSchema>;
@@ -69,6 +72,8 @@ export interface ReplyComposerSubject {
   createdAt: string | null;
   tweetText: string | null;
   mediaKind: string;
+  localFilePath: string | null;
+  playableFilePath: string | null;
   analysis: {
     captionBrief: string | null;
     sceneDescription: string | null;
@@ -97,8 +102,13 @@ export interface ReplyMediaCandidate {
   videoFilePath: string | null;
   mediaKind: string | null;
   combinedScore: number;
+  rankingScore: number | null;
+  assetStarred: boolean;
+  assetUsageCount: number | null;
+  duplicateGroupUsageCount: number | null;
+  hotnessScore: number | null;
   matchReason: string | null;
-  sourceType: "usage_facet" | "meme_template";
+  sourceType: "usage_facet" | "meme_template" | "source_tweet";
   sourceLabel: string | null;
   analysis: {
     captionBrief: string | null;
@@ -127,7 +137,12 @@ export interface ReplyCompositionResult {
     provider: string;
     queries: string[];
     resultCount: number;
+    rawResultCount?: number;
     warning: string | null;
+    queryOutcomes?: Array<{
+      query: string;
+      resultCount: number;
+    }>;
     wishlistSavedCount?: number;
   };
   selectedMedia: ReplyMediaCandidate | null;
@@ -146,7 +161,7 @@ export interface ReplySourceLookupResult {
   tweetId: string;
   usageId: string | null;
   source: "local" | "x_api";
-  analysisStatus: "complete" | "not_applicable";
+  analysisStatus: "complete" | "pending" | "not_applicable";
   subject: ReplyComposerSubject;
 }
 
@@ -173,7 +188,7 @@ export interface DesiredReplyMediaWishlistEntry {
   key: string;
   label: string;
   status: "pending" | "collected" | "dismissed";
-  source: "reply_composer" | "topic_composer" | "media_post_composer";
+  source: "reply_composer" | "topic_composer" | "media_post_composer" | "manual_post_composer";
   occurrenceCount: number;
   firstSeenAt: string;
   lastSeenAt: string;

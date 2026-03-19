@@ -115,8 +115,13 @@ const analyzeTweetMediaUsage = vi.fn();
 const analyzeTweetMediaUsageWithOptions = vi.fn();
 const writeUsageAnalysis = vi.fn(() => "/tmp/analysis.json");
 const indexUsageAnalysisInChroma = vi.fn(async () => ({ indexedCount: 1 }));
-const buildMediaAssetSummaries = vi.fn();
+const syncFacetSearchAssetIndex = vi.fn(async () => ({ indexedCount: 1 }));
 const readMediaAssetIndex = vi.fn();
+const syncMediaAssetSummaries = vi.fn(() => ({
+  file: { summaries: [] },
+  touchedAssetIds: ["asset-1"],
+  mode: "incremental"
+}));
 const getDashboardData = vi.fn();
 const findTweetUsage = vi.fn();
 const analyzeMediaAssetVideo = vi.fn(async () => null);
@@ -132,12 +137,13 @@ vi.mock("@/src/server/analysis-store", () => ({
 }));
 
 vi.mock("@/src/server/chroma-facets", () => ({
-  indexUsageAnalysisInChroma
+  indexUsageAnalysisInChroma,
+  syncFacetSearchAssetIndex
 }));
 
 vi.mock("@/src/server/media-assets", () => ({
-  buildMediaAssetSummaries,
-  readMediaAssetIndex
+  readMediaAssetIndex,
+  syncMediaAssetSummaries
 }));
 
 vi.mock("@/src/server/data", () => ({

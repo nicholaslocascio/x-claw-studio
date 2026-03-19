@@ -1,9 +1,32 @@
 import Link from "next/link";
 import { UsageQueue } from "@/src/components/usage-queue";
-import { getDashboardData } from "@/src/server/data";
+import { getLightweightUsageData, getUsagePage, USAGE_PAGE_SIZE } from "@/src/server/data";
 
-export default function MatchesPage() {
-  const data = getDashboardData();
+export default async function MatchesPage(props: {
+  searchParams?: Promise<{
+    dedupe?: string;
+    filter?: string;
+    page?: string;
+    query?: string;
+    repeatMin?: string;
+    sort?: string;
+  }>;
+}) {
+  const usages = getLightweightUsageData();
+  const searchParams = (await props.searchParams) ?? {};
+  const page = Number.parseInt(searchParams.page ?? "1", 10);
+  const pagedUsages = getUsagePage({
+    usages,
+    page: Number.isFinite(page) ? page : 1,
+    pageSize: USAGE_PAGE_SIZE,
+    query: searchParams.query,
+    matchFilter: searchParams.filter,
+    repeatMinimum: searchParams.repeatMin,
+    sort: searchParams.sort,
+    hideDuplicateAssets: searchParams.dedupe,
+    defaultMatchFilter: "matched",
+    defaultHideDuplicateAssets: true
+  });
 
   return (
     <main className="app-shell">
@@ -40,12 +63,16 @@ export default function MatchesPage() {
       </section>
 
       <UsageQueue
-        usages={data.tweetUsages}
-        initialMatchFilter="matched"
+        usages={pagedUsages.usages}
+        pagination={pagedUsages}
+        initialMatchFilter={pagedUsages.matchFilter}
+        initialRepeatMinimum={pagedUsages.repeatMinimum}
+        initialQuery={pagedUsages.query}
+        initialSortOrder={pagedUsages.sort}
         sectionLabel="Match Explorer"
         sectionTitle="Exact and similar media with shared controls"
         compact
-        initialHideDuplicateAssets
+        initialHideDuplicateAssets={pagedUsages.hideDuplicateAssets}
       />
     </main>
   );

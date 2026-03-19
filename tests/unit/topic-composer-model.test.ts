@@ -2,16 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GeminiCliTopicComposerModel } from "@/src/server/topic-composer-model";
 import type { TopicPostRequest, TopicPostSubject } from "@/src/lib/topic-composer";
 
-const { runGeminiPromptMock } = vi.hoisted(() => ({
-  runGeminiPromptMock: vi.fn()
+const { runComposePromptWithProviderMock } = vi.hoisted(() => ({
+  runComposePromptWithProviderMock: vi.fn()
 }));
 
-vi.mock("@/src/server/gemini-cli-json", async () => {
-  const actual = await vi.importActual<typeof import("@/src/server/gemini-cli-json")>("@/src/server/gemini-cli-json");
+vi.mock("@/src/server/compose-model-cli", async () => {
+  const actual = await vi.importActual<typeof import("@/src/server/compose-model-cli")>("@/src/server/compose-model-cli");
 
   return {
     ...actual,
-    runGeminiPrompt: runGeminiPromptMock
+    runComposePromptWithProvider: runComposePromptWithProviderMock
   };
 });
 
@@ -50,11 +50,11 @@ const subject: TopicPostSubject = {
 
 describe("GeminiCliTopicComposerModel", () => {
   beforeEach(() => {
-    runGeminiPromptMock.mockReset();
+    runComposePromptWithProviderMock.mockReset();
   });
 
   it("trims and dedupes oversized search query lists before schema validation", async () => {
-    runGeminiPromptMock.mockResolvedValue(
+    runComposePromptWithProviderMock.mockResolvedValue(
       JSON.stringify({
         response: JSON.stringify({
           angle: "The real shift is workflow productization, not celebrity endorsement.",
@@ -86,7 +86,7 @@ describe("GeminiCliTopicComposerModel", () => {
   });
 
   it("runs a cleanup pass before returning the final topic post draft", async () => {
-    runGeminiPromptMock
+    runComposePromptWithProviderMock
       .mockResolvedValueOnce(
         JSON.stringify({
           response: JSON.stringify({
@@ -137,9 +137,9 @@ describe("GeminiCliTopicComposerModel", () => {
       candidates: []
     });
 
-    expect(runGeminiPromptMock).toHaveBeenCalledTimes(3);
-    expect(runGeminiPromptMock.mock.calls[1]?.[0]).toContain("cleaning a generated X post draft");
-    expect(runGeminiPromptMock.mock.calls[2]?.[0]).toContain("cleaning a generated X post draft");
+    expect(runComposePromptWithProviderMock).toHaveBeenCalledTimes(3);
+    expect(runComposePromptWithProviderMock.mock.calls[1]?.[1]?.prompt).toContain("cleaning a generated X post draft");
+    expect(runComposePromptWithProviderMock.mock.calls[2]?.[1]?.prompt).toContain("cleaning a generated X post draft");
     expect(draft.selectedCandidateId).toBe("candidate-1");
     expect(draft.tweetText).toBe("the press release isn't the story. it's the stack that ships after it.");
   });

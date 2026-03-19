@@ -1,14 +1,26 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { AssetStarButton } from "@/src/components/asset-star-button";
 import { MediaPreview } from "@/src/components/media-preview";
-import { ReplyComposer } from "@/src/components/reply-composer";
 import { resolveMediaDisplayUrl } from "@/src/lib/media-display";
-import type { CapturedTweetFilter, CapturedTweetPage, CapturedTweetRecord } from "@/src/lib/types";
+import type { CapturedTweetFilter, CapturedTweetPage, CapturedTweetRecord, CapturedTweetSort } from "@/src/lib/types";
 import { getPreferredXStatusUrl } from "@/src/lib/x-status-url";
+
+const SORT_LABELS: Record<CapturedTweetSort, string> = {
+  newest_desc: "Newest first",
+  newest_asc: "Oldest first"
+};
+
+const ReplyComposer = dynamic(
+  () => import("@/src/components/reply-composer").then((module) => module.ReplyComposer),
+  {
+    loading: () => <div className="tt-placeholder mt-4">Loading reply composer...</div>
+  }
+);
 
 function formatDate(value: string | null | undefined): string {
   if (!value) {
@@ -32,16 +44,19 @@ export function CapturedTweetQueue(props: {
   initialTweetFilter?: CapturedTweetFilter;
   initialQuery?: string;
   pagination?: CapturedTweetPage;
+  countOverrides?: Record<CapturedTweetFilter, number>;
   sectionLabel?: string;
   sectionTitle?: string;
   sectionDescription?: string;
+  visibleCountLabelOverride?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isRouting, startRouting] = useTransition();
-  const [tweetFilter, setTweetFilter] = useState<CapturedTweetFilter>(props.initialTweetFilter ?? "with_media");
-  const [query, setQuery] = useState(props.initialQuery ?? "");
+  const [tweetFilter, setTweetFilter] = useState<CapturedTweetFilter>(props.pagination?.tweetFilter ?? props.initialTweetFilter ?? "with_media");
+  const [query, setQuery] = useState(props.pagination?.query ?? props.initialQuery ?? "");
+  const [sort, setSort] = useState<CapturedTweetSort>(props.pagination?.sort ?? "newest_desc");
   const [openComposerTweetKey, setOpenComposerTweetKey] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
   const openComposerRef = useRef<HTMLDivElement | null>(null);
@@ -49,7 +64,7 @@ export function CapturedTweetQueue(props: {
 
   const buildHref = useMemo(
     () =>
-      (nextPage: number, nextQuery: string, nextFilter: CapturedTweetFilter) => {
+      (nextPage: number, nextQuery: string, nextFilter: CapturedTweetFilter, nextSort: CapturedTweetSort) => {
         const params = new URLSearchParams(searchParams?.toString() ?? "");
         const trimmedQuery = nextQuery.trim();
         if (trimmedQuery) {
@@ -62,6 +77,12 @@ export function CapturedTweetQueue(props: {
           params.delete("filter");
         } else {
           params.set("filter", nextFilter);
+        }
+
+        if (nextSort === "newest_desc") {
+          params.delete("sort");
+        } else {
+          params.set("sort", nextSort);
         }
 
         if (nextPage <= 1) {
@@ -84,24 +105,26 @@ export function CapturedTweetQueue(props: {
     const nextQuery = deferredQuery.trim();
     const currentQuery = props.pagination?.query ?? "";
     const currentFilter = props.pagination?.tweetFilter ?? "all";
+    const currentSort = props.pagination?.sort ?? "newest_desc";
 
-    if (nextQuery === currentQuery && tweetFilter === currentFilter) {
+    if (nextQuery === currentQuery && tweetFilter === currentFilter && sort === currentSort) {
       return;
     }
 
     startRouting(() => {
-      router.replace(buildHref(1, nextQuery, tweetFilter), { scroll: false });
+      router.replace(buildHref(1, nextQuery, tweetFilter, sort), { scroll: false });
     });
-  }, [buildHref, deferredQuery, isPaginated, props.pagination?.query, props.pagination?.tweetFilter, router, tweetFilter]);
+  }, [buildHref, deferredQuery, isPaginated, props.pagination?.query, props.pagination?.sort, props.pagination?.tweetFilter, router, sort, tweetFilter]);
 
   const counts = useMemo(
     () =>
+      props.countOverrides ??
       props.pagination?.counts ?? {
         with_media: props.tweets.filter((entry) => entry.hasMedia).length,
         without_media: props.tweets.filter((entry) => !entry.hasMedia).length,
         all: props.tweets.length
       },
-    [props.pagination?.counts, props.tweets]
+    [props.countOverrides, props.pagination?.counts, props.tweets]
   );
 
   const visibleTweets = useMemo(() => {
@@ -136,12 +159,18 @@ export function CapturedTweetQueue(props: {
 
         return haystack.includes(normalizedQuery);
       })
-      .sort((left, right) => getTweetTimestampMs(right.tweet) - getTweetTimestampMs(left.tweet));
-  }, [deferredQuery, isPaginated, props.tweets, tweetFilter]);
+      .sort((left, right) =>
+        sort === "newest_asc"
+          ? getTweetTimestampMs(left.tweet) - getTweetTimestampMs(right.tweet)
+          : getTweetTimestampMs(right.tweet) - getTweetTimestampMs(left.tweet)
+      );
+  }, [deferredQuery, isPaginated, props.tweets, sort, tweetFilter]);
 
-  const visibleCountLabel = props.pagination
-    ? `${props.tweets.length} shown of ${props.pagination.totalResults}`
-    : `${visibleTweets.length} visible`;
+  const visibleCountLabel =
+    props.visibleCountLabelOverride ??
+    (props.pagination
+      ? `${props.tweets.length} shown of ${props.pagination.totalResults}`
+      : `${visibleTweets.length} visible`);
 
   useEffect(() => {
     if (!openComposerTweetKey || !openComposerRef.current) {
@@ -164,11 +193,11 @@ export function CapturedTweetQueue(props: {
       <div className="panel-body">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="section-kicker">{props.sectionLabel ?? "Captured Tweets"}</div>
-            <h2 className="section-title mt-3">{props.sectionTitle ?? "Browse everything the crawler saved."}</h2>
+            <div className="section-kicker">{props.sectionLabel ?? "Captured tweets"}</div>
+            <h2 className="section-title mt-3">{props.sectionTitle ?? "Browse saved tweets."}</h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
               {props.sectionDescription ??
-                "The default view stays focused on tweets with media, but text-only posts remain visible when you need full crawl context."}
+                "The default view stays focused on tweets with media, but text-only posts remain visible when you need full capture context."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -194,7 +223,7 @@ export function CapturedTweetQueue(props: {
             className={`tt-link ${tweetFilter === "without_media" ? "tt-chip-accent" : ""}`}
             onClick={() => setTweetFilter("without_media")}
           >
-            <span>Without media {counts.without_media}</span>
+            <span>Text only {counts.without_media}</span>
           </button>
           <button
             type="button"
@@ -205,16 +234,29 @@ export function CapturedTweetQueue(props: {
           </button>
         </div>
 
-        <label className="tt-field mb-6 max-w-xl">
-          <span className="tt-field-label">Search tweets</span>
-          <input
-            type="text"
-            className="tt-input"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter by author or tweet text"
-          />
-        </label>
+        <div className="mb-6 grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
+          <label className="tt-field">
+            <span className="tt-field-label">Search tweets</span>
+            <input
+              type="text"
+              className="tt-input"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by author or tweet text"
+            />
+          </label>
+
+          <label className="tt-field">
+            <span className="tt-field-label">Sort</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value as CapturedTweetSort)} className="tt-select">
+              {Object.entries(SORT_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         {props.pagination ? (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -223,14 +265,14 @@ export function CapturedTweetQueue(props: {
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
-                href={buildHref(props.pagination.page - 1, props.pagination.query, props.pagination.tweetFilter)}
+                href={buildHref(props.pagination.page - 1, props.pagination.query, props.pagination.tweetFilter, props.pagination.sort)}
                 className={`tt-link ${!props.pagination.hasPreviousPage ? "pointer-events-none opacity-40" : ""}`}
                 aria-disabled={!props.pagination.hasPreviousPage}
               >
                 <span>Previous {props.pagination.pageSize}</span>
               </Link>
               <Link
-                href={buildHref(props.pagination.page + 1, props.pagination.query, props.pagination.tweetFilter)}
+                href={buildHref(props.pagination.page + 1, props.pagination.query, props.pagination.tweetFilter, props.pagination.sort)}
                 className={`tt-link ${!props.pagination.hasNextPage ? "pointer-events-none opacity-40" : ""}`}
                 aria-disabled={!props.pagination.hasNextPage}
               >
@@ -280,7 +322,7 @@ export function CapturedTweetQueue(props: {
                   </div>
                 ) : (
                   <div className="mb-4 border border-dashed border-white/15 bg-black/10 px-4 py-6 text-sm leading-6 text-slate-400">
-                    Text-only tweet captured. No media usage record or analysis job is created for this post.
+                    Text-only tweet saved. No media review item is created for this post.
                   </div>
                 )}
 
@@ -296,11 +338,25 @@ export function CapturedTweetQueue(props: {
                       {entry.mediaCount} media
                     </span>
                     <span className="tt-chip">analyzed {entry.analyzedMediaCount}</span>
-                    {entry.firstMediaAssetId ? (
-                      <span className={`tt-chip ${entry.firstMediaAssetStarred ? "tt-chip-accent" : ""}`}>
-                        {entry.firstMediaAssetStarred ? "starred" : "not starred"}
+                    {entry.hasMedia ? (
+                      <span
+                        className={`tt-chip ${
+                          entry.mediaAssetSyncStatus === "missing" || entry.mediaAssetSyncStatus === "stale"
+                            ? "tt-chip-accent"
+                            : ""
+                        }`}
+                      >
+                        {entry.mediaAssetSyncStatus === "missing"
+                          ? "Missing"
+                          : entry.mediaAssetSyncStatus === "stale"
+                            ? "Out of date"
+                            : "Indexed"}
                       </span>
                     ) : null}
+                    {entry.hasMedia ? <span className="tt-chip">indexed {entry.indexedMediaCount ?? 0}</span> : null}
+                    {(entry.staleMediaCount ?? 0) > 0 ? <span className="tt-chip tt-chip-accent">stale {entry.staleMediaCount}</span> : null}
+                    {(entry.missingMediaCount ?? 0) > 0 ? <span className="tt-chip tt-chip-accent">missing {entry.missingMediaCount}</span> : null}
+                    {entry.firstMediaAssetId && entry.firstMediaAssetStarred ? <span className="tt-chip tt-chip-accent">starred</span> : null}
                   </div>
                 </div>
 
@@ -327,6 +383,16 @@ export function CapturedTweetQueue(props: {
                   {tweetUrl ? (
                     <Link href={tweetUrl} className="tt-link" target="_blank" rel="noreferrer">
                       <span>Open on X</span>
+                    </Link>
+                  ) : null}
+                  {tweetUrl ? (
+                    <Link href={`/replies?url=${encodeURIComponent(tweetUrl)}`} className="tt-link">
+                      <span>Open in reply builder</span>
+                    </Link>
+                  ) : null}
+                  {entry.tweet.tweetId ? (
+                    <Link href={`/clone?tweetId=${encodeURIComponent(entry.tweet.tweetId)}`} className="tt-link">
+                      <span>Open in clone builder</span>
                     </Link>
                   ) : null}
                   {entry.tweet.tweetId ? (
@@ -365,6 +431,8 @@ export function CapturedTweetQueue(props: {
                         createdAt: entry.tweet.createdAt,
                         tweetText: entry.tweet.text,
                         mediaKind: entry.tweet.media[0]?.mediaKind ?? "none",
+                        localFilePath: null,
+                        playableFilePath: null,
                         analysis: {
                           captionBrief: null,
                           sceneDescription: null,

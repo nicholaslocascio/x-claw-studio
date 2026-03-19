@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDashboardData } from "@/src/server/data";
+import { getLightweightUsageData } from "@/src/server/data";
 import {
   promoteStarredAssetVideo,
   readMediaAssetIndex,
@@ -24,9 +24,8 @@ export async function POST(request: Request) {
   }
   const assetIndex = readMediaAssetIndex();
   if (assetIndex) {
-    const data = getDashboardData();
     syncMediaAssetSummaries({
-      usages: data.tweetUsages,
+      usages: getLightweightUsageData(),
       assetIndex,
       assetIds: [body.assetId]
     });

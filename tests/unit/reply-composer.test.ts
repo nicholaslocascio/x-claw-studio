@@ -3,39 +3,21 @@ import type { ReplyCompositionDraft, ReplyCompositionPlan } from "@/src/lib/repl
 import { composeReplyForUsage } from "@/src/server/reply-composer";
 
 const {
-  analyzeAndIndexTweetUsageMock,
-  getDashboardDataMock,
-  getUsageDetailMock,
-  findTweetByIdMock,
+  resolveReplyComposerSubjectMock,
   planReplyMock,
   composeReplyMock,
   searchManyMock,
   recordReplyMediaWishlistMock
 } = vi.hoisted(() => ({
-  analyzeAndIndexTweetUsageMock: vi.fn(),
-  getDashboardDataMock: vi.fn(),
-  getUsageDetailMock: vi.fn(),
-  findTweetByIdMock: vi.fn(),
+  resolveReplyComposerSubjectMock: vi.fn(),
   planReplyMock: vi.fn(),
   composeReplyMock: vi.fn(),
   searchManyMock: vi.fn(),
   recordReplyMediaWishlistMock: vi.fn()
 }));
 
-vi.mock("@/src/server/analysis-pipeline", () => ({
-  analyzeAndIndexTweetUsage: analyzeAndIndexTweetUsageMock
-}));
-
-vi.mock("@/src/server/data", () => ({
-  getDashboardData: getDashboardDataMock
-}));
-
-vi.mock("@/src/server/usage-details", () => ({
-  getUsageDetail: getUsageDetailMock
-}));
-
-vi.mock("@/src/server/tweet-repository", () => ({
-  findTweetById: findTweetByIdMock
+vi.mock("@/src/server/reply-composer-subject", () => ({
+  resolveReplyComposerSubject: resolveReplyComposerSubjectMock
 }));
 
 vi.mock("@/src/server/reply-composer-model", () => ({
@@ -78,38 +60,9 @@ const draft: ReplyCompositionDraft = {
   postingNotes: null
 };
 
-const analyzedUsageDetail = {
-  usageId: "tweet-1-0",
-  mediaIndex: 0,
-  tweet: {
-    tweetId: "tweet-1",
-    tweetUrl: "https://x.com/example/status/1",
-    authorUsername: "example",
-    createdAt: "2026-03-11T10:00:00.000Z",
-    text: "This pricing move was always the plan.",
-    media: [{ mediaKind: "image" }]
-  },
-  analysis: {
-    mediaKind: "image",
-    caption_brief: "reaction image",
-    scene_description: "A skeptical stare",
-    primary_emotion: "skepticism",
-    conveys: "called-shot confidence",
-    user_intent: "call out the strategy",
-    rhetorical_role: "reaction",
-    text_media_relationship: "sharpens the claim",
-    cultural_reference: null,
-    analogy_target: "platform pricing",
-    search_keywords: ["skeptical", "reaction"]
-  }
-};
-
 describe("composeReplyForUsage", () => {
   beforeEach(() => {
-    analyzeAndIndexTweetUsageMock.mockReset();
-    getDashboardDataMock.mockReset();
-    getUsageDetailMock.mockReset();
-    findTweetByIdMock.mockReset();
+    resolveReplyComposerSubjectMock.mockReset();
     planReplyMock.mockReset();
     composeReplyMock.mockReset();
     searchManyMock.mockReset();
@@ -142,30 +95,32 @@ describe("composeReplyForUsage", () => {
       warning: null
     });
     recordReplyMediaWishlistMock.mockReturnValue([]);
+    resolveReplyComposerSubjectMock.mockResolvedValue({
+      usageId: "tweet-1-0",
+      tweetId: "tweet-1",
+      tweetUrl: "https://x.com/example/status/1",
+      authorUsername: "example",
+      createdAt: "2026-03-11T10:00:00.000Z",
+      tweetText: "This pricing move was always the plan.",
+      mediaKind: "image",
+      localFilePath: "data/raw/tweet-1.jpg",
+      playableFilePath: null,
+      analysis: {
+        captionBrief: "reaction image",
+        sceneDescription: "A skeptical stare",
+        primaryEmotion: "skepticism",
+        conveys: "called-shot confidence",
+        userIntent: "call out the strategy",
+        rhetoricalRole: "reaction",
+        textMediaRelationship: "sharpens the claim",
+        culturalReference: null,
+        analogyTarget: "platform pricing",
+        searchKeywords: ["skeptical", "reaction"]
+      }
+    });
   });
 
-  it("analyzes the first media usage before composing a tweet-led reply when analysis is missing", async () => {
-    getDashboardDataMock.mockReturnValue({
-      tweetUsages: [
-        {
-          usageId: "tweet-1-0",
-          mediaIndex: 0,
-          tweet: {
-            tweetId: "tweet-1",
-            tweetUrl: "https://x.com/example/status/1",
-            authorUsername: "example",
-            createdAt: "2026-03-11T10:00:00.000Z",
-            text: "This pricing move was always the plan.",
-            media: [{ mediaKind: "image" }]
-          },
-          analysis: {
-            status: "pending"
-          }
-        }
-      ]
-    });
-    getUsageDetailMock.mockResolvedValue(analyzedUsageDetail);
-
+  it("uses the shared subject resolver before composing a reply", async () => {
     const progressEvents: string[] = [];
     const result = await composeReplyForUsage(
       {
@@ -180,26 +135,43 @@ describe("composeReplyForUsage", () => {
       }
     );
 
-    expect(analyzeAndIndexTweetUsageMock).toHaveBeenCalledWith("tweet-1", 0);
-    expect(getUsageDetailMock).toHaveBeenCalledWith("tweet-1-0");
+    expect(resolveReplyComposerSubjectMock).toHaveBeenCalledWith(
+      {
+        tweetId: "tweet-1",
+        goal: "insight",
+        mode: "single"
+      },
+      expect.any(Object)
+    );
     expect(planReplyMock.mock.calls[0]?.[0].request.usageId).toBe("tweet-1-0");
     expect(planReplyMock.mock.calls[0]?.[0].subject.analysis.primaryEmotion).toBe("skepticism");
     expect(result.request.usageId).toBe("tweet-1-0");
-    expect(progressEvents).toContain("analyzing");
+    expect(progressEvents).toContain("starting");
   });
 
   it("falls back to tweet-only composition when the tweet has no media usage", async () => {
-    getDashboardDataMock.mockReturnValue({
-      tweetUsages: []
-    });
-    findTweetByIdMock.mockReturnValue({
+    resolveReplyComposerSubjectMock.mockResolvedValue({
+      usageId: null,
       tweetId: "tweet-9",
       tweetUrl: "https://x.com/example/status/9",
       authorUsername: "example",
       createdAt: "2026-03-11T10:00:00.000Z",
-      text: "Text only",
-      sourceName: "x",
-      media: []
+      tweetText: "Text only",
+      mediaKind: "none",
+      localFilePath: null,
+      playableFilePath: null,
+      analysis: {
+        captionBrief: null,
+        sceneDescription: null,
+        primaryEmotion: null,
+        conveys: null,
+        userIntent: null,
+        rhetoricalRole: null,
+        textMediaRelationship: null,
+        culturalReference: null,
+        analogyTarget: null,
+        searchKeywords: []
+      }
     });
 
     const result = await composeReplyForUsage({
@@ -208,7 +180,6 @@ describe("composeReplyForUsage", () => {
       mode: "single"
     });
 
-    expect(analyzeAndIndexTweetUsageMock).not.toHaveBeenCalled();
     expect(result.subject.usageId).toBeNull();
     expect(result.subject.mediaKind).toBe("none");
   });

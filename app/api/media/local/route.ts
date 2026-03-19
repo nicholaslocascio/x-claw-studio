@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 const projectRoot = process.cwd();
 const rawMediaRoot = path.join(projectRoot, "data", "raw");
 const assetVideoRoot = path.join(projectRoot, "data", "analysis", "media-assets", "videos");
+const memeTemplateAssetRoot = path.join(projectRoot, "data", "analysis", "meme-templates", "assets");
 const MIME_BY_EXTENSION: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -79,20 +80,17 @@ function inferMimeTypeFromBuffer(filePath: string, buffer: Buffer): string {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const relativePath = searchParams.get("path");
+  const requestedPath = searchParams.get("path");
 
-  if (!relativePath) {
+  if (!requestedPath) {
     return NextResponse.json({ error: "Missing path" }, { status: 400 });
   }
 
-  if (path.isAbsolute(relativePath)) {
-    return NextResponse.json({ error: "Absolute paths are not allowed" }, { status: 400 });
-  }
+  const absolutePath = path.isAbsolute(requestedPath)
+    ? path.resolve(path.normalize(requestedPath))
+    : path.resolve(projectRoot, path.normalize(requestedPath).replace(/^(\.\.(\/|\\|$))+/, ""));
 
-  const normalizedPath = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, "");
-  const absolutePath = path.resolve(projectRoot, normalizedPath);
-
-  const allowedRoots = [rawMediaRoot, assetVideoRoot];
+  const allowedRoots = [rawMediaRoot, assetVideoRoot, memeTemplateAssetRoot];
   const isAllowedPath = allowedRoots.some(
     (root) => absolutePath === root || absolutePath.startsWith(`${root}${path.sep}`)
   );

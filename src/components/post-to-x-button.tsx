@@ -95,7 +95,16 @@ export function PostToXButton(props: SaveToTypefullyButtonProps) {
         const nextSocialSets = body?.socialSets ?? [];
         setSocialSets(nextSocialSets);
 
-        if (!socialSetId && nextSocialSets.length === 1) {
+        const currentSocialSetId = Number(socialSetId);
+        const hasCurrentSelection =
+          Number.isInteger(currentSocialSetId) && currentSocialSetId > 0 && nextSocialSets.some((item) => item.id === currentSocialSetId);
+
+        if (nextSocialSets.length > 0 && socialSetId && !hasCurrentSelection) {
+          window.localStorage.removeItem(SOCIAL_SET_STORAGE_KEY);
+          setSocialSetId("");
+        }
+
+        if (!hasCurrentSelection && nextSocialSets.length === 1) {
           const nextId = String(nextSocialSets[0].id);
           setSocialSetId(nextId);
           window.localStorage.setItem(SOCIAL_SET_STORAGE_KEY, nextId);
@@ -170,6 +179,11 @@ export function PostToXButton(props: SaveToTypefullyButtonProps) {
     }
   }
 
+  function resetSocialSetSelection(): void {
+    setSocialSetId("");
+    window.localStorage.removeItem(SOCIAL_SET_STORAGE_KEY);
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <button type="button" className="tt-button" onClick={() => void saveDraft()} disabled={isSaveDisabled}>
@@ -223,6 +237,12 @@ export function PostToXButton(props: SaveToTypefullyButtonProps) {
           />
         )}
       </label>
+
+      {socialSetId ? (
+        <button type="button" className="tt-button tt-button-ghost" onClick={resetSocialSetSelection}>
+          <span>Reset account</span>
+        </button>
+      ) : null}
 
       {requiresTargetUrl ? (
         <label className="flex min-w-[18rem] flex-1 items-center gap-2 text-xs uppercase tracking-[0.14em] text-slate-400">

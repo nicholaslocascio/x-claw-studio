@@ -76,6 +76,14 @@
     @apply relative mx-auto w-[min(100%-1.5rem,92rem)] px-0 pb-24 pt-5 sm:w-[min(100%-2rem,92rem)] sm:pb-28 sm:pt-7;
   }
 
+  .app-top-nav-shell {
+    @apply sticky top-0 z-40 px-3 pt-3 sm:px-4 sm:pt-4;
+  }
+
+  .app-top-nav {
+    @apply relative mx-auto w-[min(100%,92rem)] backdrop-blur-xl;
+  }
+
   .bg-sun {
     @apply pointer-events-none fixed right-[-8rem] top-[-6rem] z-0 h-[28rem] w-[28rem] rounded-full opacity-12 blur-[90px];
     background-image: radial-gradient(circle, rgba(61, 220, 151, 0.85), rgba(89, 199, 255, 0.16) 45%, transparent 72%);
@@ -92,25 +100,29 @@
   }
 
   .section-kicker {
-    @apply font-[family:var(--font-label)] text-[11px] uppercase tracking-[0.32em] text-accent;
+    @apply font-[family:var(--font-label)] text-xs uppercase tracking-[0.24em] text-accent;
     text-shadow: none;
   }
 
   .section-title {
-    @apply font-[family:var(--font-heading)] text-2xl font-black uppercase tracking-[0.12em] text-text sm:text-3xl lg:text-4xl;
+    @apply font-[family:var(--font-heading)] text-2xl font-black tracking-[0.04em] text-text sm:text-3xl lg:text-4xl;
     text-shadow: none;
   }
 
   .hero-title {
-    @apply font-[family:var(--font-heading)] text-3xl font-black uppercase tracking-[0.08em] text-text sm:text-4xl lg:text-6xl;
+    @apply font-[family:var(--font-heading)] text-3xl font-black tracking-[0.03em] text-text sm:text-4xl lg:text-5xl;
   }
 
   .hero-copy {
-    @apply max-w-3xl text-sm leading-7 text-slate-300 sm:text-base;
+    @apply max-w-3xl text-base leading-8 text-slate-300;
+  }
+
+  .page-intro {
+    @apply text-base leading-8 text-slate-300;
   }
 
   .terminal-panel {
-    @apply relative overflow-hidden border border-border bg-panel-soft shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-md;
+    @apply relative overflow-hidden rounded-2xl border border-border bg-panel-soft shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-md;
     clip-path: polygon(0 12px, 12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px));
   }
 
@@ -124,7 +136,7 @@
   }
 
   .terminal-window {
-    @apply relative overflow-hidden border border-border bg-panel-strong shadow-[0_10px_28px_rgba(0,0,0,0.24)] backdrop-blur-md;
+    @apply relative overflow-hidden rounded-2xl border border-border bg-panel-strong shadow-[0_10px_28px_rgba(0,0,0,0.24)] backdrop-blur-md;
     clip-path: polygon(0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px));
   }
 
@@ -145,13 +157,29 @@
   }
 
   .neon-card {
-    @apply relative overflow-hidden border border-border bg-panel p-4 shadow-[0_10px_24px_rgba(0,0,0,0.18)] backdrop-blur-md transition-all duration-150 ease-linear hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-[0_14px_28px_rgba(0,0,0,0.24)] sm:p-5;
+    @apply relative overflow-hidden rounded-2xl border border-border bg-panel p-4 shadow-[0_10px_24px_rgba(0,0,0,0.18)] backdrop-blur-md transition-[transform,border-color,box-shadow,background-color] duration-150 ease-linear hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-[0_14px_28px_rgba(0,0,0,0.24)] sm:p-5;
     clip-path: polygon(0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px));
   }
 
   .metric-card {
-    @apply relative min-h-[9rem] overflow-hidden border border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(89,199,255,0.03))] p-4 shadow-[0_10px_24px_rgba(0,0,0,0.18)] backdrop-blur-md transition-all duration-150 ease-linear hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-[0_14px_28px_rgba(0,0,0,0.24)] sm:p-5;
+    @apply relative min-h-[9rem] overflow-hidden rounded-2xl border border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(89,199,255,0.03))] p-4 shadow-[0_10px_24px_rgba(0,0,0,0.18)] backdrop-blur-md transition-[transform,border-color,box-shadow,background-color] duration-150 ease-linear hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-[0_14px_28px_rgba(0,0,0,0.24)] sm:p-5;
     clip-path: polygon(0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px));
+  }
+
+  .metric-number {
+    @apply font-[family:var(--font-heading)] text-3xl font-black tracking-[0.02em] sm:text-4xl;
+  }
+
+  .priority-card {
+    @apply flex h-full flex-col justify-between gap-5 rounded-2xl border border-border bg-panel-strong p-5 shadow-[0_10px_24px_rgba(0,0,0,0.18)];
+  }
+
+  .summary-card {
+    @apply rounded-2xl border border-slate-700 bg-slate-800/85 p-4;
+  }
+
+  .card-title {
+    @apply text-xl font-semibold tracking-normal text-slate-100;
   }
 
   .hero-panel {
@@ -167,7 +195,7 @@
   }
 
   .tt-chip {
-    @apply inline-flex items-center gap-1 border border-border bg-muted-surface px-2 py-1 font-[family:var(--font-label)] text-[10px] uppercase tracking-[0.14em] text-slate-100;
+    @apply inline-flex items-center gap-1 rounded-full border border-border bg-muted-surface px-2.5 py-1 font-[family:var(--font-label)] text-[10px] uppercase tracking-[0.12em] text-slate-100;
     clip-path: polygon(0 5px, 5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px));
   }
 
@@ -184,7 +212,7 @@
   }
 
   .tt-copy {
-    @apply text-sm leading-7 text-slate-300 sm:text-[15px];
+    @apply text-base leading-8 text-slate-300;
   }
 
   .tt-muted {
@@ -192,7 +220,7 @@
   }
 
   .tt-link {
-    @apply inline-flex min-h-10 items-center justify-center gap-1 rounded-md border border-slate-600 bg-slate-800/80 px-4 py-2.5 font-[family:var(--font-body)] text-sm font-medium text-slate-100 transition-all duration-150 ease-linear hover:border-slate-400 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-void;
+    @apply inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-slate-600 bg-slate-800/80 px-4 py-2.5 font-[family:var(--font-body)] text-sm font-medium text-slate-100 transition-[transform,border-color,background-color,color,box-shadow] duration-150 ease-linear hover:border-slate-400 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-void;
     clip-path: polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px));
   }
 
@@ -201,7 +229,7 @@
   }
 
   .tt-button {
-    @apply inline-flex min-h-10 items-center justify-center gap-1 rounded-md border border-accent/80 bg-accent px-4 py-2.5 font-[family:var(--font-body)] text-sm font-semibold text-slate-950 shadow-[0_8px_20px_rgba(61,220,151,0.18)] transition-all duration-150 ease-linear disabled:cursor-not-allowed disabled:opacity-50 hover:border-accent hover:bg-[#59efb0] hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-void;
+    @apply inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-accent/80 bg-accent px-4 py-2.5 font-[family:var(--font-body)] text-sm font-semibold text-slate-950 shadow-[0_8px_20px_rgba(61,220,151,0.18)] transition-[transform,border-color,background-color,color,box-shadow,opacity] duration-150 ease-linear disabled:cursor-not-allowed disabled:opacity-50 hover:border-accent hover:bg-[#59efb0] hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-void;
     clip-path: polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px));
   }
 
@@ -222,7 +250,7 @@
   }
 
   .tt-icon-button {
-    @apply inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800/85 text-base text-slate-100 transition-all duration-150 ease-linear hover:border-slate-400 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-void;
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-600 bg-slate-800/85 text-base text-slate-100 transition-[transform,border-color,background-color,color,box-shadow] duration-150 ease-linear hover:border-slate-400 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-void;
     clip-path: polygon(0 5px, 5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px));
   }
 
@@ -248,12 +276,12 @@
 
 
   .tt-input {
-    @apply w-full rounded-md border border-slate-600 bg-slate-900 px-4 py-3 font-[family:var(--font-body)] text-base tracking-normal text-slate-50 placeholder:text-slate-400 focus:border-cyan focus:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-cyan/25 focus:ring-offset-0;
+    @apply w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 font-[family:var(--font-body)] text-base tracking-normal text-slate-50 placeholder:text-slate-400 focus:border-cyan focus:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-cyan/25 focus:ring-offset-0;
     clip-path: polygon(0 8px, 8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
   }
 
   .tt-select {
-    @apply w-full appearance-none rounded-md border border-slate-600 bg-slate-900 px-4 py-3 font-[family:var(--font-body)] text-base tracking-normal text-slate-50 focus:border-cyan focus:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-cyan/25 focus:ring-offset-0;
+    @apply w-full appearance-none rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 font-[family:var(--font-body)] text-base tracking-normal text-slate-50 focus:border-cyan focus:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-cyan/25 focus:ring-offset-0;
     clip-path: polygon(0 8px, 8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
     background-image:
       linear-gradient(45deg, transparent 50%, rgba(226, 232, 240, 0.95) 50%),
@@ -294,12 +322,12 @@
   }
 
   .tt-subpanel {
-    @apply border border-border bg-muted-surface/65 p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.015)];
+    @apply rounded-2xl border border-border bg-muted-surface/65 p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.015)];
     clip-path: polygon(0 8px, 8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
   }
 
   .tt-subpanel-soft {
-    @apply border border-slate-700 bg-slate-800/85 p-3;
+    @apply rounded-2xl border border-slate-700 bg-slate-800/85 p-3;
     clip-path: polygon(0 8px, 8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
   }
 
@@ -313,7 +341,29 @@
   }
 
   .tt-data-label {
-    @apply font-[family:var(--font-label)] text-[10px] uppercase tracking-[0.24em] text-muted;
+    @apply font-[family:var(--font-label)] text-[11px] uppercase tracking-[0.18em] text-muted;
+  }
+
+  .tt-disclosure {
+    @apply overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/60;
+    clip-path: polygon(0 8px, 8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+
+  .tt-disclosure summary {
+    @apply flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-[family:var(--font-body)] text-sm font-medium text-slate-100 transition-[background-color,color] duration-150 ease-linear hover:bg-white/4;
+  }
+
+  .tt-disclosure summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .tt-disclosure-body {
+    @apply border-t border-white/8 p-4;
+  }
+
+  .tt-lead-card {
+    @apply rounded-2xl border border-cyan/20 bg-[linear-gradient(135deg,rgba(61,220,151,0.12),rgba(89,199,255,0.08)_55%,rgba(20,23,34,0.96))] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)];
+    clip-path: polygon(0 8px, 8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
   }
 
   .tt-media-frame {
@@ -324,6 +374,11 @@
   .tt-media-frame img,
   .tt-media-frame video {
     @apply h-full w-full object-cover;
+  }
+
+  .tt-media-frame-native img,
+  .tt-media-frame-native video {
+    @apply h-auto object-contain;
   }
 
   .control-action-grid {
@@ -352,8 +407,65 @@
     @apply flex flex-wrap gap-1.5;
   }
 
+  .usage-status-popover {
+    @apply relative;
+  }
+
+  .usage-status-pill {
+    @apply inline-flex min-h-8 items-center rounded-full border border-slate-600 bg-slate-800/85 px-3 py-1 font-[family:var(--font-label)] text-[10px] uppercase tracking-[0.12em] text-slate-100 transition-[border-color,background-color,color] duration-150 ease-linear hover:border-slate-400 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-void;
+  }
+
+  .usage-status-pill-accent {
+    @apply border-accent/60 bg-accent/12 text-accent hover:border-accent hover:bg-accent/20 hover:text-accent;
+  }
+
+  .usage-status-popover-panel {
+    @apply pointer-events-none absolute left-0 top-full z-20 mt-2 min-w-36 rounded-xl border border-slate-700 bg-slate-950/96 p-3 text-xs leading-6 text-slate-200 opacity-0 shadow-[0_14px_28px_rgba(0,0,0,0.32)] transition-opacity duration-150 ease-linear;
+    clip-path: polygon(0 8px, 8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+
+  .usage-status-popover:hover .usage-status-popover-panel,
+  .usage-status-popover:focus-within .usage-status-popover-panel {
+    @apply opacity-100;
+  }
+
   .usage-preview-text {
     @apply line-clamp-3 text-sm leading-6 text-slate-300;
+  }
+
+  .copy-action-group {
+    @apply relative inline-flex items-stretch;
+  }
+
+  .copy-action-menu {
+    @apply relative;
+  }
+
+  .copy-action-menu[open] .copy-action-toggle {
+    @apply border-slate-400 bg-slate-700 text-white;
+  }
+
+  .copy-action-toggle {
+    @apply inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-r-xl border border-l-0 border-slate-600 bg-slate-800/80 text-sm text-slate-100 transition-[border-color,background-color,color] duration-150 ease-linear hover:border-slate-400 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-void;
+    list-style: none;
+    clip-path: polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px));
+  }
+
+  .copy-action-toggle::-webkit-details-marker {
+    display: none;
+  }
+
+  .copy-action-group > .tt-link {
+    @apply rounded-r-none;
+  }
+
+  .copy-action-panel {
+    @apply absolute left-0 top-full z-20 mt-2 min-w-40 rounded-xl border border-slate-700 bg-slate-950/96 p-1.5 shadow-[0_14px_28px_rgba(0,0,0,0.32)];
+    clip-path: polygon(0 8px, 8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+
+  .copy-action-item {
+    @apply flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors duration-150 ease-linear hover:bg-white/6 hover:text-white disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .status-dot {

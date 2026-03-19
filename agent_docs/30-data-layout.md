@@ -13,8 +13,20 @@ data/
   analysis/
     tweet-usages/
       <usageId>.json
+    search-eval-fixtures.json
+    trend-digest-examples.json
     generated-drafts/
       index.json
+    compose-runs/
+      <compose-run-id>/
+        metadata.json
+        request.json
+        progress.ndjson
+        events.ndjson
+        status.json
+        *.json
+        *.txt
+        *.md
     topic-tweets/
       <analysisId>.json
     media-assets/
@@ -53,11 +65,46 @@ Per-usage semantic analysis files. One media usage per file.
 
 Video analyses may include video-only facets such as `video_music`, `video_sound`, `video_dialogue`, and `video_action`.
 
+Dashboard and indexing reads skip malformed JSON files in this directory and log a warning instead of failing the whole read path.
+
 Primary type: [`UsageAnalysis`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
 
 Written by:
 
 - [`src/server/analysis-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-store.ts)
+
+### `data/analysis/search-eval-fixtures.json`
+
+Checked-in search relevance fixtures tied to the local media corpus.
+
+Each fixture can define:
+
+- a query plus search mode (`combined_blob` or `facet_concat`)
+- whether the default stronger-candidates filter stays on
+- relevant asset ids or usage ids that should be surfaced
+- negative asset ids or usage ids that should stay out of the top results
+- pass/fail thresholds such as first relevant rank, hits@5, or negative hits@5
+
+Used by:
+
+- [`src/cli/eval-search-quality.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/eval-search-quality.ts)
+
+### `data/analysis/trend-digest-examples.json`
+
+Checked-in reference examples for the stacked trend-digest post style.
+
+Each example includes:
+
+- an id and short title
+- a full reference tweet in the target "what happened in the last 24-48 hours" shape
+- a short explanation of why the example works
+- labeled signals such as alarm-bell opener, stacked lines, or hard kicker
+
+Used by:
+
+- [`src/server/trend-digest-examples.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/trend-digest-examples.ts)
+- [`src/server/manual-post-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/manual-post-composer-prompt.ts)
+- [`src/cli/eval-trend-quality.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/eval-trend-quality.ts)
 
 ### `data/analysis/generated-drafts/`
 
@@ -67,6 +114,7 @@ File-backed history for generated replies and tweets.
 
 - draft kind: reply, topic post, or media-led post
 - lifecycle status: running, complete, or failed
+- compose-run id and the relative log directory for that run
 - request identifiers such as usage id, tweet id, topic id, or asset id
 - latest streamed progress message and detail
 - final generated outputs when the run completes
@@ -76,6 +124,24 @@ File-backed history for generated replies and tweets.
 Written by:
 
 - [`src/server/generated-drafts.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/generated-drafts.ts)
+
+### `data/analysis/compose-runs/`
+
+Per-compose debug artifacts. One folder per reply, topic-post, media-post, manual-post, or clone run.
+
+Each run folder includes:
+
+- `metadata.json` with run id, draft id, route, kind, and start time
+- `request.json` with the parsed API or job request payload
+- `progress.ndjson` with streamed stage updates
+- `events.ndjson` with timing, search, model-call, and error events
+- `status.json` when the run finishes
+- numbered prompt, response, search, plan, draft, and result artifacts for each step
+- reply-compose prompt artifacts now include the original source-tweet grounding passed into the final compose call, including the saved source-media path when one exists locally
+
+Written by:
+
+- [`src/server/compose-run-log.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/compose-run-log.ts)
 
 ### `data/analysis/topic-tweets/`
 
@@ -194,6 +260,8 @@ When changing shape, check these in order:
 
 - `schema.sql` exists, but the live app path is file-backed.
 - The dashboard merges saved analyses with synthetic pending rows.
-- The dashboard read model enriches each `TweetUsageRecord` with duplicate-group metadata and a computed hotness score; those values are derived at read time and are not persisted as separate JSON files.
+- Composer request and draft payloads are not length-capped by the local Zod contracts. If a downstream target like X or Typefully rejects oversized text, that happens after local composition rather than during request parsing.
+- The dashboard read model enriches each `TweetUsageRecord` with duplicate-group metadata, asset sync status (`indexed`, `stale`, or `missing`), and a computed hotness score; those values are derived at read time and are not persisted as separate JSON files.
+- `CapturedTweetRecord` also carries derived asset-sync counts so the tweet browser can flag posts whose media have not been folded into the asset index yet.
 - The dashboard does not rebuild topic analyses on read. Topic caches are produced by the explicit `analyze:topics` flow.
 - Asset summaries may be fallback summaries when only one complete usage analysis exists.

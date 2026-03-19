@@ -44,6 +44,8 @@ Use this when you know what kind of change you need to make but not where to sta
 1. Start in [`src/server/chroma-facets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/chroma-facets.ts).
 2. Distinguish lexical fallback behavior from vector behavior before changing ranking.
 3. Verify the UI in [`src/components/facet-search.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/facet-search.tsx).
+4. Run `npm run eval:search-quality` and inspect `tmp/search-quality-eval.json` before and after ranking or corpus-shape changes.
+5. If the change is query-specific, tighten or extend [`data/analysis/search-eval-fixtures.json`](/Users/nicklocascio/Projects/twitter-trend/data/analysis/search-eval-fixtures.json) in the same task so the regression stays covered.
 
 ## Change Reply Composition
 

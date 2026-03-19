@@ -4,13 +4,14 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { getDashboardData, getCapturedTweetPage, MAX_CAPTURED_TWEET_PAGE_SIZE } from "@/src/server/data";
-import type { CapturedTweetFilter, CapturedTweetPage } from "@/src/lib/types";
+import type { CapturedTweetFilter, CapturedTweetPage, CapturedTweetSort } from "@/src/lib/types";
 
 type OutputFormat = "json" | "jsonl";
 
 interface SearchTweetsCliOptions {
   query: string | null;
   filter: CapturedTweetFilter;
+  sort: CapturedTweetSort;
   page: number;
   limit: number;
   format: OutputFormat;
@@ -20,12 +21,13 @@ interface SearchTweetsCliOptions {
 const HELP_TEXT = `List captured tweets with server-style filtering and pagination.
 
 Usage:
-  x-media-analyst search tweets [--query "<query>"] [--filter all|with_media|without_media] [--page <n>] [--limit <n>] [--format json|jsonl]
+  x-media-analyst search tweets [--query "<query>"] [--filter all|with_media|without_media] [--sort newest_desc|newest_asc] [--page <n>] [--limit <n>] [--format json|jsonl]
   x-media-analyst search tweets "<query>"
 
 Flags:
   -q, --query <query>     Filter by author or tweet text.
   --filter <filter>       all, with_media, or without_media. Default: all.
+  --sort <sort>           newest_desc or newest_asc. Default: newest_desc.
   -p, --page <n>          Page number. Default: 1.
   -l, --limit <n>         Page size. Max: 200. Default: 200.
   --format <format>       Output format: json or jsonl. Default: json.
@@ -38,7 +40,7 @@ Exit codes:
   2  Usage error or invalid arguments
 
 Examples:
-  x-media-analyst search tweets --filter with_media --limit 50
+  x-media-analyst search tweets --filter with_media --sort newest_asc --limit 50
   x-media-analyst search tweets "mask reveal" --page 2 --json
   x-media-analyst search tweets --query "elon" --filter without_media --jsonl`;
 
@@ -63,6 +65,14 @@ function parseFilter(value: string | undefined): CapturedTweetFilter {
   throw new Error(`Invalid --filter value "${value}". Expected all, with_media, or without_media.`);
 }
 
+function parseSort(value: string | undefined): CapturedTweetSort {
+  if (!value || value === "newest_desc" || value === "newest_asc" || value === "newest") {
+    return value === "newest_asc" ? "newest_asc" : "newest_desc";
+  }
+
+  throw new Error(`Invalid --sort value "${value}". Expected newest_desc or newest_asc.`);
+}
+
 export function parseSearchTweetsCliArgs(argv: string[]): SearchTweetsCliOptions {
   const { values, positionals } = parseArgs({
     args: argv,
@@ -70,6 +80,7 @@ export function parseSearchTweetsCliArgs(argv: string[]): SearchTweetsCliOptions
     options: {
       query: { type: "string", short: "q" },
       filter: { type: "string" },
+      sort: { type: "string" },
       page: { type: "string", short: "p" },
       limit: { type: "string", short: "l" },
       format: { type: "string" },
@@ -92,6 +103,7 @@ export function parseSearchTweetsCliArgs(argv: string[]): SearchTweetsCliOptions
   return {
     query: values.query ?? positionals[0] ?? null,
     filter: parseFilter(values.filter),
+    sort: parseSort(values.sort),
     page: parsePositiveInt(values.page, "--page", 1),
     limit: parsePositiveInt(values.limit, "--limit", MAX_CAPTURED_TWEET_PAGE_SIZE),
     format,
@@ -104,6 +116,7 @@ export function buildAgentTweetSearchPayload(result: CapturedTweetPage) {
     command: "search-tweets",
     query: result.query,
     filter: result.tweetFilter,
+    sort: result.sort,
     page: result.page,
     limit: result.pageSize,
     total_results: result.totalResults,
@@ -146,6 +159,7 @@ function printJsonLines(value: ReturnType<typeof buildAgentTweetSearchPayload>):
       command: value.command,
       query: value.query,
       filter: value.filter,
+      sort: value.sort,
       page: value.page,
       limit: value.limit,
       total_results: value.total_results,
@@ -184,7 +198,8 @@ async function main(argv: string[]): Promise<void> {
     page: options.page,
     pageSize: options.limit,
     query: options.query,
-    tweetFilter: options.filter
+    tweetFilter: options.filter,
+    sort: options.sort
   });
   const payload = buildAgentTweetSearchPayload(result);
 

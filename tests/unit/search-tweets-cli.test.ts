@@ -5,10 +5,11 @@ import { buildAgentTweetSearchPayload, parseSearchTweetsCliArgs } from "@/src/cl
 describe("parseSearchTweetsCliArgs", () => {
   it("accepts flag-based arguments", () => {
     expect(
-      parseSearchTweetsCliArgs(["--query", "mask reveal", "--filter", "with_media", "--page", "2", "--limit", "50", "--jsonl"])
+      parseSearchTweetsCliArgs(["--query", "mask reveal", "--filter", "with_media", "--sort", "newest_asc", "--page", "2", "--limit", "50", "--jsonl"])
     ).toMatchObject({
       query: "mask reveal",
       filter: "with_media",
+      sort: "newest_asc",
       page: 2,
       limit: 50,
       format: "jsonl"
@@ -19,6 +20,7 @@ describe("parseSearchTweetsCliArgs", () => {
     expect(parseSearchTweetsCliArgs(["terminal poster"])).toMatchObject({
       query: "terminal poster",
       filter: "all",
+      sort: "newest_desc",
       page: 1,
       limit: 200,
       format: "json"
@@ -40,6 +42,7 @@ describe("buildAgentTweetSearchPayload", () => {
             authorUsername: "example",
             authorDisplayName: "Example",
             authorProfileImageUrl: null,
+            authorFollowerCount: null,
             createdAt: "2026-03-11T10:00:00.000Z",
             text: "mask reveal energy",
             metrics: {
@@ -62,7 +65,9 @@ describe("buildAgentTweetSearchPayload", () => {
           firstMediaAssetStarred: false,
           topicLabels: ["Mask Reveal"],
           topTopicLabel: "Mask Reveal",
-          topTopicHotnessScore: 5.2
+          topTopicHotnessScore: 5.2,
+          relativeEngagementScore: null,
+          relativeEngagementBand: null
         }
       ],
       page: 2,
@@ -73,6 +78,7 @@ describe("buildAgentTweetSearchPayload", () => {
       hasNextPage: true,
       query: "mask reveal",
       tweetFilter: "without_media",
+      sort: "newest_desc",
       counts: {
         with_media: 30,
         without_media: 125,
@@ -86,6 +92,7 @@ describe("buildAgentTweetSearchPayload", () => {
       command: "search-tweets",
       query: "mask reveal",
       filter: "without_media",
+      sort: "newest_desc",
       page: 2,
       limit: 50,
       total_results: 125,

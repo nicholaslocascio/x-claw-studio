@@ -1,13 +1,15 @@
 import { TOPIC_POST_GOALS, type TopicPostBatchResult, type TopicPostProgressEvent, type TopicPostRequest, type TopicPostResult, type TopicPostSubject } from "@/src/lib/topic-composer";
-import { getDashboardData } from "@/src/server/data";
+import { getTopicPageData } from "@/src/server/data";
 import { CliFacetReplyMediaSearchProvider } from "@/src/server/reply-media-search";
 import { createTopicComposerModel } from "@/src/server/topic-composer-model";
 import { getGroundedTopicNews } from "@/src/server/topic-grounded-news";
 import { composeAllGoals } from "@/src/server/composer-batch";
+import { getCurrentComposeRunLog } from "@/src/server/compose-run-log";
 import { recordAssetWishlist } from "@/src/server/reply-media-wishlist";
+import { createPerfTrace } from "@/src/server/perf-log";
 
 async function buildTopicSubject(topicId: string): Promise<TopicPostSubject> {
-  const data = getDashboardData();
+  const data = getTopicPageData();
   const topic = data.topicClusters.find((item) => item.topicId === topicId);
   if (!topic) {
     throw new Error(`Topic ${topicId} was not found`);
@@ -43,15 +45,28 @@ async function composeTweetForPreparedSubject(
     onProgress?: (event: TopicPostProgressEvent) => void;
   }
 ): Promise<TopicPostResult> {
+  const perf = createPerfTrace("compose:topic", {
+    topicId: subject.topicId,
+    goal: request.goal
+  });
   const model = createTopicComposerModel();
-  const search = new CliFacetReplyMediaSearchProvider();
+  const search = new CliFacetReplyMediaSearchProvider({ scope: "topic-post" });
+  const logger = getCurrentComposeRunLog();
+  logger?.writeJsonArtifact("topic-subject", {
+    request,
+    subject
+  });
 
   options?.onProgress?.({
     stage: "planning",
-    message: "Planning tweet angle and media search",
+    message: "Agent is planning the tweet angle and media search",
     detail: subject.label
   });
   const plan = await model.planPost({ request, subject });
+  perf.mark("plan_ready", {
+    queryCount: plan.searchQueries.length
+  });
+  logger?.writeJsonArtifact("topic-plan", plan);
 
   options?.onProgress?.({
     stage: "searching",
@@ -59,10 +74,14 @@ async function composeTweetForPreparedSubject(
     detail: plan.searchQueries.join(" | ")
   });
   const searchResult = await search.searchMany(plan.searchQueries);
+  perf.mark("search_ready", {
+    candidateCount: searchResult.candidates.length,
+    warning: searchResult.warning ?? null
+  });
 
   options?.onProgress?.({
     stage: "composing",
-    message: "Writing tweet and choosing media",
+    message: "Agent is writing the tweet and choosing media",
     detail: `${searchResult.candidates.length} candidates`
   });
   const draft = await model.composePost({
@@ -71,6 +90,10 @@ async function composeTweetForPreparedSubject(
     plan,
     candidates: searchResult.candidates
   });
+  perf.mark("draft_ready", {
+    selectedCandidateId: draft.selectedCandidateId ?? null
+  });
+  logger?.writeJsonArtifact("topic-draft", draft);
 
   const selectedMedia =
     searchResult.candidates.find((candidate) => candidate.candidateId === draft.selectedCandidateId) ?? null;
@@ -102,7 +125,7 @@ async function composeTweetForPreparedSubject(
     detail: selectedMedia ? "media selected" : "text-only draft"
   });
 
-  return {
+  const result = {
     provider: model.providerId,
     request,
     subject,
@@ -123,6 +146,12 @@ async function composeTweetForPreparedSubject(
     selectedMedia,
     alternativeMedia
   };
+  logger?.writeJsonArtifact("topic-result", result);
+  perf.end({
+    selectedMedia: Boolean(selectedMedia),
+    wishlistSavedCount: wishlistEntries.length
+  });
+  return result;
 }
 
 export async function composeTweetFromTopic(
@@ -131,6 +160,10 @@ export async function composeTweetFromTopic(
     onProgress?: (event: TopicPostProgressEvent) => void;
   }
 ): Promise<TopicPostResult> {
+  const perf = createPerfTrace("compose:topic.subject", {
+    topicId: request.topicId,
+    goal: request.goal
+  });
   options?.onProgress?.({
     stage: "starting",
     message: "Loading topic context",
@@ -138,6 +171,10 @@ export async function composeTweetFromTopic(
   });
 
   const subject = await buildTopicSubject(request.topicId);
+  perf.end({
+    representativeTweetCount: subject.representativeTweets.length,
+    hasGroundedNews: Boolean(subject.groundedNews)
+  });
   return composeTweetForPreparedSubject(request, subject, options);
 }
 
@@ -147,6 +184,10 @@ export async function composeTweetsFromTopicForAllGoals(
     onProgress?: (event: TopicPostProgressEvent) => void;
   }
 ): Promise<TopicPostBatchResult> {
+  const perf = createPerfTrace("compose:topic.batch", {
+    topicId: request.topicId,
+    goalCount: TOPIC_POST_GOALS.length
+  });
   options?.onProgress?.({
     stage: "starting",
     message: "Loading topic context once for all goals",
@@ -158,12 +199,19 @@ export async function composeTweetsFromTopicForAllGoals(
     queuedGoals: TOPIC_POST_GOALS.length
   });
   const subject = await buildTopicSubject(request.topicId);
+  perf.mark("subject_ready", {
+    representativeTweetCount: subject.representativeTweets.length,
+    hasGroundedNews: Boolean(subject.groundedNews)
+  });
   const results = await composeAllGoals({
     goals: TOPIC_POST_GOALS,
     request,
     runSingle: (goalRequest, goalOptions) => composeTweetForPreparedSubject(goalRequest, subject, goalOptions),
     onProgress: options?.onProgress,
     maxConcurrency: request.maxConcurrency
+  });
+  perf.end({
+    resultCount: results.length
   });
 
   return {

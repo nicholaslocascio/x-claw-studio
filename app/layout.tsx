@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Orbitron, Share_Tech_Mono } from "next/font/google";
+import { AppTopNav } from "@/src/components/app-top-nav";
 import "./globals.css";
 
 const heading = Orbitron({
@@ -35,7 +36,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${heading.variable} ${label.variable} ${body.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AppTopNav />
+        {children}
+      </body>
     </html>
   );
 }

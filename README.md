@@ -227,13 +227,20 @@ To recompute media fingerprints, asset clusters, and pHash match views across al
 npm run media:rebuild
 ```
 
+Next.js dev server only:
+
+```bash
+make up-dev
+```
+
 One-command daily polling stack:
 
 ```bash
 make up
 ```
 
-That is the one-command local stack. It starts Next.js, the scheduler loop, and Chroma, and it restarts Next or the scheduler if they exit and restarts Chroma if heartbeat fails.
+That is the one-command local stack. It builds the app, starts the production Next.js server, the scheduler loop, and Chroma, and it restarts Next or the scheduler if they exit and restarts Chroma if heartbeat fails.
+Before the stack launches Next, it clears any existing listener on the app port so a stray local process does not trap the supervisor in an `EADDRINUSE` restart loop.
 
 If you only want the scheduler-only path:
 
@@ -267,7 +274,7 @@ Notes:
 - `crawl:x-api` is the primary command for the main X API capture path
 - `crawl:openclaw` remains as a compatibility alias
 - both crawl paths refresh the page as the first action, then use the shared scroll humanizer so capture timing and scroll direction are less rigid
-- by default both crawl paths auto-run missing analysis after the crawl completes; set `AUTO_ANALYZE_AFTER_CRAWL=0` to disable that
+- by default both crawl paths auto-run missing analysis and topic refresh after the crawl completes; set `AUTO_ANALYZE_AFTER_CRAWL=0` to disable both, or `AUTO_ANALYZE_TOPICS_AFTER_CRAWL=0` to skip only topic refresh
 - the crawler launches Chromium non-headless so you can validate login state
 - if the Playwright-managed Chromium bundle is missing, the crawler falls back to your locally installed Google Chrome; if neither is available, run `npx playwright install chromium`
 - by default the crawler downloads images and video poster thumbnails, but does not download `video.twimg.com` payloads

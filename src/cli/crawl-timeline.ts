@@ -5,7 +5,8 @@ import { chromium, type LaunchOptions, type Response } from "playwright";
 import { ensureDir, inferMediaExtension, inferMediaExtensionFromBuffer, slugify, writeJson } from "@/src/lib/fs";
 import { extractTweetsFromHtml } from "@/src/lib/extract-tweets";
 import { createScrollHumanizer, type ScrollHumanizerDriver } from "@/src/lib/scroll-humanizer";
-import { queueMissingUsageAnalysis } from "@/src/server/auto-analysis";
+import { queueMissingUsageAnalysis, queueTopicAnalysisRefresh } from "@/src/server/auto-analysis";
+import { syncFacetSearchAssetIndex } from "@/src/server/chroma-facets";
 import { getDashboardData } from "@/src/server/data";
 import { collectMediaUsageIdsFromTweets, syncMediaAssetIndex, syncMediaAssetSummaries } from "@/src/server/media-assets";
 import type {
@@ -32,6 +33,10 @@ const downloadImages = process.env.DOWNLOAD_IMAGES !== "0";
 const downloadVideoPosters = process.env.DOWNLOAD_VIDEO_POSTERS !== "0";
 const downloadVideos = process.env.DOWNLOAD_VIDEOS === "1";
 const autoAnalyzeAfterCrawl = process.env.AUTO_ANALYZE_AFTER_CRAWL !== "0";
+const autoAnalyzeTopicsAfterCrawl =
+  process.env.AUTO_ANALYZE_TOPICS_AFTER_CRAWL !== undefined
+    ? process.env.AUTO_ANALYZE_TOPICS_AFTER_CRAWL !== "0"
+    : autoAnalyzeAfterCrawl;
 
 const humanizer = createScrollHumanizer({
   capturePauseMs: scrollPauseMs,
@@ -324,14 +329,23 @@ async function run(): Promise<void> {
     manifests: data.manifests,
     usageIds: newUsageIds
   });
-  syncMediaAssetSummaries({
+  const summarySync = syncMediaAssetSummaries({
     usages: data.tweetUsages,
     assetIndex: assetSync.index,
     assetIds: assetSync.touchedAssetIds
   });
+  await syncFacetSearchAssetIndex({
+    summaries: summarySync.file.summaries,
+    usages: data.tweetUsages,
+    assetIds: summarySync.touchedAssetIds
+  });
   if (autoAnalyzeAfterCrawl) {
     console.log("Queueing detached missing-usage analysis after crawl...");
     queueMissingUsageAnalysis("timeline crawl");
+  }
+  if (autoAnalyzeTopicsAfterCrawl) {
+    console.log("Queueing detached topic analysis after crawl...");
+    queueTopicAnalysisRefresh("timeline crawl");
   }
   await browser.close();
   console.log(`Wrote manifest -> ${path.relative(projectRoot, manifestPath)}`);

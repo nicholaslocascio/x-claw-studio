@@ -19,6 +19,7 @@ export async function POST(request: Request) {
   if (
     task !== "crawl_timeline" &&
     task !== "crawl_x_api" &&
+    task !== "capture_priority_accounts" &&
     task !== "capture_x_api_timeline" &&
     task !== "capture_x_api_tweet" &&
     task !== "capture_x_api_tweet_and_compose_replies" &&

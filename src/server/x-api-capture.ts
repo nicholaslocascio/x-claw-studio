@@ -4,8 +4,10 @@ import { inferMediaExtension, inferMediaExtensionFromBuffer, slugify, ensureDir,
 import { buildUsageId } from "@/src/lib/usage-id";
 import type { CrawlManifest, ExtractedTweet, InterceptedMediaClass, InterceptedMediaRecord } from "@/src/lib/types";
 import { extractTweetIdFromStatusUrl, normalizeXStatusUrl } from "@/src/lib/x-status-url";
-import { queueMissingUsageAnalysis } from "@/src/server/auto-analysis";
+import { queueMissingUsageAnalysis, queueTopicAnalysisRefresh } from "@/src/server/auto-analysis";
+import { spawnDetachedNodeScript } from "@/src/server/cli-process";
 import { getDashboardData } from "@/src/server/data";
+import { markPriorityAccountsRunCompleted, readPriorityAccountsConfig } from "@/src/server/priority-accounts";
 import {
   collectMediaUsageIdsFromTweets,
   promoteStarredAssetVideo,
@@ -13,13 +15,18 @@ import {
   syncMediaAssetIndex,
   syncMediaAssetSummaries
 } from "@/src/server/media-assets";
-import { fetchXHomeTimeline, lookupXPostById } from "@/src/server/x-api";
+import { syncFacetSearchAssetIndex } from "@/src/server/chroma-facets";
+import { fetchXHomeTimeline, fetchXUserTweets, lookupXPostById, lookupXUserByUsername } from "@/src/server/x-api";
 
 const projectRoot = process.cwd();
 const downloadImages = process.env.DOWNLOAD_IMAGES !== "0";
 const downloadVideoPosters = process.env.DOWNLOAD_VIDEO_POSTERS !== "0";
 const downloadVideos = process.env.DOWNLOAD_VIDEOS === "1";
 const autoAnalyzeAfterCapture = process.env.AUTO_ANALYZE_AFTER_CRAWL !== "0";
+const autoAnalyzeTopicsAfterCapture =
+  process.env.AUTO_ANALYZE_TOPICS_AFTER_CRAWL !== undefined
+    ? process.env.AUTO_ANALYZE_TOPICS_AFTER_CRAWL !== "0"
+    : autoAnalyzeAfterCapture;
 const configuredMaxPages = Number(process.env.X_API_TIMELINE_MAX_PAGES || process.env.MAX_SCROLLS || 5);
 const configuredMaxResults = Number(process.env.X_API_TIMELINE_MAX_RESULTS || 100);
 const configuredExclude = (process.env.X_API_TIMELINE_EXCLUDE ?? "replies,retweets")
@@ -39,6 +46,17 @@ export interface XApiCaptureResult {
 export interface RunXApiCaptureInput {
   mode: XApiCaptureMode;
   tweetUrl?: string | null;
+  postProcessMode?: "inline" | "deferred";
+}
+
+function buildRunPaths(runPrefix: string, runId: string) {
+  const rawDir = path.join(projectRoot, "data", "raw", `${runPrefix}-${runId}`);
+  return {
+    rawDir,
+    htmlDir: path.join(rawDir, "html"),
+    mediaDir: path.join(rawDir, "media"),
+    manifestPath: path.join(rawDir, "manifest.json")
+  };
 }
 
 function formatDuration(ms: number): string {
@@ -54,6 +72,14 @@ function formatDuration(ms: number): string {
   }
 
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}
+
+function readJsonFile<T>(filePath: string): T | null {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
 }
 
 async function persistUrl(
@@ -157,17 +183,10 @@ async function persistTweetMedia(
 
 async function syncCaptureOutputs(
   manifest: CrawlManifest,
-  manifestPath: string,
+  _manifestPath: string,
   runStartedAt: number,
   startUrl: string | null
 ): Promise<void> {
-  manifest.completedAt = new Date().toISOString();
-  console.log(`Writing manifest -> ${path.relative(projectRoot, manifestPath)}`);
-  writeJson(manifestPath, manifest);
-  console.log(
-    `Manifest written. tweets=${manifest.capturedTweets.length} media=${manifest.interceptedMedia.length} elapsed=${formatDuration(Date.now() - runStartedAt)}`
-  );
-
   console.log("Loading dashboard data for media sync...");
   const data = getDashboardData();
   const newUsageIds = collectMediaUsageIdsFromTweets(manifest.capturedTweets);
@@ -193,6 +212,11 @@ async function syncCaptureOutputs(
     usages: data.tweetUsages,
     assetIndex,
     assetIds: assetSync.touchedAssetIds
+  });
+  await syncFacetSearchAssetIndex({
+    summaries: summarySync.file.summaries,
+    usages: data.tweetUsages,
+    assetIds: summarySync.touchedAssetIds
   });
   console.log(
     `Media asset summaries synced. mode=${summarySync.mode} touchedAssets=${summarySync.touchedAssetIds.length} duration=${formatDuration(Date.now() - summaryBuildStartedAt)} elapsed=${formatDuration(Date.now() - runStartedAt)}`
@@ -230,17 +254,79 @@ async function syncCaptureOutputs(
   } else {
     console.log("Auto-analysis skipped because AUTO_ANALYZE_AFTER_CRAWL=0");
   }
+
+  if (autoAnalyzeTopicsAfterCapture) {
+    console.log(
+      `Queueing detached topic analysis after capture... elapsed=${formatDuration(Date.now() - runStartedAt)}`
+    );
+    queueTopicAnalysisRefresh("x api capture");
+  } else {
+    console.log("Topic auto-analysis skipped because AUTO_ANALYZE_TOPICS_AFTER_CRAWL=0");
+  }
+}
+
+function queueDeferredCapturePostProcess(input: {
+  manifestPath: string;
+  runStartedAt: number;
+  startUrl: string | null;
+}): boolean {
+  try {
+    spawnDetachedNodeScript({
+      cwd: projectRoot,
+      scriptPath: path.join(projectRoot, "src", "cli", "sync-capture-outputs.ts"),
+      env: {
+        ...process.env,
+        CAPTURE_MANIFEST_PATH: input.manifestPath,
+        CAPTURE_RUN_STARTED_AT_MS: String(input.runStartedAt),
+        ...(input.startUrl ? { CAPTURE_START_URL: input.startUrl } : {})
+      }
+    });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Failed to queue deferred capture post-processing: ${message}`);
+    return false;
+  }
+}
+
+export async function runDeferredCapturePostProcess(input: {
+  manifestPath: string;
+  runStartedAt: number;
+  startUrl?: string | null;
+}): Promise<void> {
+  const manifest = readJsonFile<CrawlManifest>(input.manifestPath);
+  if (!manifest) {
+    throw new Error(`Capture manifest not found at ${input.manifestPath}`);
+  }
+
+  await syncCaptureOutputs(
+    manifest,
+    input.manifestPath,
+    Number.isFinite(input.runStartedAt) ? input.runStartedAt : Date.now(),
+    input.startUrl ?? null
+  );
+}
+
+function writeCaptureManifest(
+  manifest: CrawlManifest,
+  manifestPath: string,
+  runStartedAt: number
+): void {
+  manifest.completedAt = new Date().toISOString();
+  console.log(`Writing manifest -> ${path.relative(projectRoot, manifestPath)}`);
+  writeJson(manifestPath, manifest);
+  console.log(
+    `Manifest written. tweets=${manifest.capturedTweets.length} media=${manifest.interceptedMedia.length} elapsed=${formatDuration(Date.now() - runStartedAt)}`
+  );
 }
 
 export async function runXApiCapture(input: RunXApiCaptureInput): Promise<XApiCaptureResult> {
   const runStartedAt = Date.now();
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
   const runPrefix = input.mode === "home_timeline" ? "x-api-home" : "x-api-post";
-  const rawDir = path.join(projectRoot, "data", "raw", `${runPrefix}-${runId}`);
-  const htmlDir = path.join(rawDir, "html");
-  const mediaDir = path.join(rawDir, "media");
-  const manifestPath = path.join(rawDir, "manifest.json");
+  const { rawDir, htmlDir, mediaDir, manifestPath } = buildRunPaths(runPrefix, runId);
   const persistedUrls = new Set<string>();
+  const postProcessMode = input.postProcessMode ?? "inline";
   ensureDir(htmlDir);
   ensureDir(mediaDir);
 
@@ -284,7 +370,17 @@ export async function runXApiCapture(input: RunXApiCaptureInput): Promise<XApiCa
     console.log(
       `Capture summary: uniqueTweets=${manifest.capturedTweets.length} interceptedMedia=${manifest.interceptedMedia.length} elapsed=${formatDuration(Date.now() - runStartedAt)}`
     );
-    await syncCaptureOutputs(manifest, manifestPath, runStartedAt, null);
+    writeCaptureManifest(manifest, manifestPath, runStartedAt);
+
+    if (postProcessMode === "deferred") {
+      console.log("Queueing capture post-processing in a detached worker.");
+      if (!queueDeferredCapturePostProcess({ manifestPath, runStartedAt, startUrl: null })) {
+        console.log("Detached worker unavailable. Falling back to inline post-processing.");
+        await syncCaptureOutputs(manifest, manifestPath, runStartedAt, null);
+      }
+    } else {
+      await syncCaptureOutputs(manifest, manifestPath, runStartedAt, null);
+    }
     console.log(
       `crawl_x_api complete. manifest=${path.relative(projectRoot, manifestPath)} totalElapsed=${formatDuration(Date.now() - runStartedAt)}`
     );
@@ -334,7 +430,17 @@ export async function runXApiCapture(input: RunXApiCaptureInput): Promise<XApiCa
   console.log(
     `Capture summary: uniqueTweets=${manifest.capturedTweets.length} interceptedMedia=${manifest.interceptedMedia.length} elapsed=${formatDuration(Date.now() - runStartedAt)}`
   );
-  await syncCaptureOutputs(manifest, manifestPath, runStartedAt, startUrl);
+  writeCaptureManifest(manifest, manifestPath, runStartedAt);
+
+  if (postProcessMode === "deferred") {
+    console.log("Queueing capture post-processing in a detached worker.");
+    if (!queueDeferredCapturePostProcess({ manifestPath, runStartedAt, startUrl })) {
+      console.log("Detached worker unavailable. Falling back to inline post-processing.");
+      await syncCaptureOutputs(manifest, manifestPath, runStartedAt, startUrl);
+    }
+  } else {
+    await syncCaptureOutputs(manifest, manifestPath, runStartedAt, startUrl);
+  }
   console.log(
     `capture_x_api_tweet complete. manifest=${path.relative(projectRoot, manifestPath)} totalElapsed=${formatDuration(Date.now() - runStartedAt)}`
   );
@@ -344,5 +450,120 @@ export async function runXApiCapture(input: RunXApiCaptureInput): Promise<XApiCa
     manifestPath,
     rawDir,
     topTweet: lookup.tweet
+  };
+}
+
+export async function runPriorityAccountsCapture(options?: {
+  postProcessMode?: "inline" | "deferred";
+  maxResultsPerAccount?: number;
+}): Promise<XApiCaptureResult | null> {
+  const config = readPriorityAccountsConfig();
+  if (!config.enabled || config.accounts.length === 0) {
+    console.log("Priority-account capture skipped because no accounts are configured.");
+    return null;
+  }
+
+  const runStartedAt = Date.now();
+  const runId = new Date().toISOString().replace(/[:.]/g, "-");
+  const runPrefix = "x-api-priority";
+  const { rawDir, htmlDir, mediaDir, manifestPath } = buildRunPaths(runPrefix, runId);
+  const persistedUrls = new Set<string>();
+  const postProcessMode = options?.postProcessMode ?? "inline";
+  const maxResultsPerAccount = Math.max(5, Math.min(100, options?.maxResultsPerAccount ?? 20));
+  ensureDir(htmlDir);
+  ensureDir(mediaDir);
+
+  const manifest: CrawlManifest = {
+    runId: `${runPrefix}-${runId}`,
+    startedAt: new Date().toISOString(),
+    baseUrl: "https://api.x.com/2/users/:id/tweets",
+    maxScrolls: config.accounts.length,
+    downloadImages,
+    downloadVideoPosters,
+    downloadVideos,
+    capturedTweets: [],
+    interceptedMedia: []
+  };
+
+  const updatedAccounts: typeof config.accounts = [];
+
+  for (const account of config.accounts) {
+    const checkedAt = new Date().toISOString();
+
+    try {
+      const lookup = await lookupXUserByUsername(account.username);
+      const user = lookup.user;
+      if (!user?.id) {
+        updatedAccounts.push({
+          ...account,
+          lastCheckedAt: checkedAt,
+          lastError: `Could not resolve @${account.username}`
+        });
+        continue;
+      }
+
+      const timeline = await fetchXUserTweets({
+        userId: user.id,
+        username: user.username ?? account.username,
+        maxResults: maxResultsPerAccount,
+        sinceId: account.lastSeenTweetId
+      });
+
+      writeJson(path.join(htmlDir, `${account.username}.json`), {
+        username: account.username,
+        userId: user.id,
+        tweets: timeline.tweets
+      });
+
+      for (const tweet of timeline.tweets) {
+        if (manifest.capturedTweets.some((entry) => entry.tweetId === tweet.tweetId)) {
+          continue;
+        }
+
+        await persistTweetMedia(tweet, manifest, mediaDir, persistedUrls);
+        manifest.capturedTweets.push(tweet);
+      }
+
+      updatedAccounts.push({
+        ...account,
+        userId: user.id,
+        label: account.label ?? user.name ?? null,
+        lastSeenTweetId: timeline.tweets[0]?.tweetId ?? account.lastSeenTweetId,
+        lastCheckedAt: checkedAt,
+        lastCapturedAt: timeline.tweets.length > 0 ? checkedAt : account.lastCapturedAt,
+        lastCaptureCount: timeline.tweets.length,
+        lastError: null
+      });
+    } catch (error) {
+      updatedAccounts.push({
+        ...account,
+        lastCheckedAt: checkedAt,
+        lastError: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  markPriorityAccountsRunCompleted(updatedAccounts);
+
+  console.log(
+    `Priority capture summary: accounts=${config.accounts.length} uniqueTweets=${manifest.capturedTweets.length} media=${manifest.interceptedMedia.length} elapsed=${formatDuration(Date.now() - runStartedAt)}`
+  );
+  writeCaptureManifest(manifest, manifestPath, runStartedAt);
+
+  if (postProcessMode === "deferred") {
+    console.log("Queueing capture post-processing in a detached worker.");
+    if (!queueDeferredCapturePostProcess({ manifestPath, runStartedAt, startUrl: null })) {
+      console.log("Detached worker unavailable. Falling back to inline post-processing.");
+      await syncCaptureOutputs(manifest, manifestPath, runStartedAt, null);
+    }
+  } else {
+    await syncCaptureOutputs(manifest, manifestPath, runStartedAt, null);
+  }
+
+  return {
+    manifest,
+    manifestPath,
+    rawDir,
+    topTweet: manifest.capturedTweets[0] ?? null
   };
 }

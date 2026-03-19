@@ -2,9 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { MediaPreview } from "@/src/components/media-preview";
-import { PostToXButton } from "@/src/components/post-to-x-button";
-import type { GeneratedDraftRecord } from "@/src/lib/generated-drafts";
+import {
+  applyDraftRefToLeadingRunningDraft,
+  applyProgressToLeadingRunningDraft,
+  buildLocalRunningDraft,
+  fetchGeneratedDraftHistory,
+  markLeadingRunningDraftFailed,
+  prependLocalRunningDraft
+} from "@/src/components/compose-client";
+import { ComposeRunReference } from "@/src/components/compose-run-reference";
+import { DraftOutputCard } from "@/src/components/draft-output-card";
+import type { GeneratedDraftOutputRecord, GeneratedDraftRecord } from "@/src/lib/generated-drafts";
 import { readNdjsonStream } from "@/src/lib/ndjson-stream";
 import type {
   ReplyCompositionBatchResult,
@@ -14,7 +22,6 @@ import type {
   ReplyCompositionResult,
   ReplyComposerSubject
 } from "@/src/lib/reply-composer";
-import { getPreferredXStatusUrl } from "@/src/lib/x-status-url";
 
 const GOAL_OPTIONS: Array<{ value: ReplyCompositionGoal; label: string }> = [
   { value: "insight", label: "Add insight" },
@@ -28,6 +35,57 @@ function isBatchResult(
   value: ReplyCompositionResult | ReplyCompositionBatchResult
 ): value is ReplyCompositionBatchResult {
   return "mode" in value && value.mode === "all_goals";
+}
+
+function buildDraftOutputFromReplyResult(result: ReplyCompositionResult): GeneratedDraftOutputRecord {
+  return {
+    goal: result.request.goal,
+    text: result.reply.text,
+    whyThisWorks: result.reply.whyThisReplyWorks,
+    mediaSelectionReason: result.reply.mediaSelectionReason,
+    postingNotes: result.reply.postingNotes,
+    selectedMediaLabel: result.selectedMedia?.sourceLabel ?? result.selectedMedia?.tweetText ?? null,
+    selectedMediaSourceType: result.selectedMedia?.sourceType ?? null,
+    selectedMediaCandidateId: result.selectedMedia?.candidateId ?? null,
+    selectedMediaUsageId: result.selectedMedia?.usageId ?? null,
+    selectedMediaAssetId: result.selectedMedia?.assetId ?? null,
+    selectedMediaTweetId: result.selectedMedia?.tweetId ?? null,
+    selectedMediaTweetUrl: result.selectedMedia?.tweetUrl ?? null,
+    selectedMediaDisplayUrl: result.selectedMedia?.displayUrl ?? null,
+    selectedMediaLocalFilePath: result.selectedMedia?.localFilePath ?? null,
+    selectedMediaVideoFilePath: result.selectedMedia?.videoFilePath ?? null,
+    selectedMediaCombinedScore: result.selectedMedia?.combinedScore ?? null,
+    selectedMediaRankingScore: result.selectedMedia?.rankingScore ?? null,
+    selectedMediaMatchReason: result.selectedMedia?.matchReason ?? null,
+    selectedMediaAssetStarred: result.selectedMedia?.assetStarred ?? false,
+    selectedMediaAssetUsageCount: result.selectedMedia?.assetUsageCount ?? null,
+    selectedMediaDuplicateGroupUsageCount: result.selectedMedia?.duplicateGroupUsageCount ?? null,
+    selectedMediaHotnessScore: result.selectedMedia?.hotnessScore ?? null,
+    alternativeMedia: result.alternativeMedia.map((candidate) => ({
+      candidateId: candidate.candidateId,
+      usageId: candidate.usageId,
+      assetId: candidate.assetId,
+      tweetId: candidate.tweetId,
+      tweetUrl: candidate.tweetUrl,
+      authorUsername: candidate.authorUsername,
+      tweetText: candidate.tweetText,
+      displayUrl: candidate.displayUrl,
+      localFilePath: candidate.localFilePath,
+      videoFilePath: candidate.videoFilePath,
+      sourceType: candidate.sourceType,
+      sourceLabel: candidate.sourceLabel,
+      combinedScore: candidate.combinedScore,
+      rankingScore: candidate.rankingScore,
+      matchReason: candidate.matchReason,
+      assetStarred: candidate.assetStarred,
+      assetUsageCount: candidate.assetUsageCount,
+      duplicateGroupUsageCount: candidate.duplicateGroupUsageCount,
+      hotnessScore: candidate.hotnessScore,
+      sceneDescription: candidate.analysis?.sceneDescription ?? null,
+      primaryEmotion: candidate.analysis?.primaryEmotion ?? null,
+      conveys: candidate.analysis?.conveys ?? null
+    }))
+  };
 }
 
 export function ReplyComposer(props: {
@@ -55,47 +113,28 @@ export function ReplyComposer(props: {
   const queuedGoals = latestProgress?.queuedGoals ?? Math.max(0, totalGoals - completedGoals - runningGoals);
 
   async function loadDraftHistory(): Promise<void> {
-    const params = new URLSearchParams({
-      kind: "reply",
-      limit: "12"
-    });
-    if (props.usageId) {
-      params.set("usageId", props.usageId);
-    } else if (props.tweetId) {
-      params.set("tweetId", props.tweetId);
-    }
-
-    const response = await fetch(`/api/generated-drafts?${params.toString()}`);
-    if (!response.ok) {
-      return;
-    }
-
-    const body = await response.json();
-    setDraftHistory(body.drafts ?? []);
+    setDraftHistory(
+      await fetchGeneratedDraftHistory({
+        kind: "reply",
+        usageId: props.usageId,
+        tweetId: props.usageId ? null : props.tweetId,
+        limit: 12
+      })
+    );
   }
 
   useEffect(() => {
     let isCancelled = false;
 
     async function run(): Promise<void> {
-      const params = new URLSearchParams({
+      const drafts = await fetchGeneratedDraftHistory({
         kind: "reply",
-        limit: "12"
+        usageId: props.usageId,
+        tweetId: props.usageId ? null : props.tweetId,
+        limit: 12
       });
-      if (props.usageId) {
-        params.set("usageId", props.usageId);
-      } else if (props.tweetId) {
-        params.set("tweetId", props.tweetId);
-      }
-
-      const response = await fetch(`/api/generated-drafts?${params.toString()}`);
-      if (!response.ok || isCancelled) {
-        return;
-      }
-
-      const body = await response.json();
       if (!isCancelled) {
-        setDraftHistory(body.drafts ?? []);
+        setDraftHistory(drafts);
       }
     }
 
@@ -112,27 +151,19 @@ export function ReplyComposer(props: {
     setProgressEvents([]);
     setIsRunning(true);
     setRunMode(mode);
-    setDraftHistory((current) => [
-      {
-        draftId: `local-running-${Date.now()}`,
-        kind: "reply",
-        status: "running",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        usageId: props.usageId ?? null,
-        tweetId: props.tweetId ?? props.subject.tweetId,
-        topicId: null,
-        assetId: null,
-        requestGoal: goal,
-        requestMode: mode,
-        progressStage: "starting",
-        progressMessage: "Starting reply composition",
-        progressDetail: null,
-        errorMessage: null,
-        outputs: []
-      },
-      ...current.filter((item) => !item.draftId.startsWith("local-running-"))
-    ]);
+    setDraftHistory((current) =>
+      prependLocalRunningDraft(
+        current,
+        buildLocalRunningDraft({
+          kind: "reply",
+          usageId: props.usageId ?? null,
+          tweetId: props.tweetId ?? props.subject.tweetId,
+          requestGoal: goal,
+          requestMode: mode,
+          progressMessage: "Starting reply composition"
+        })
+      )
+    );
     const response = await fetch("/api/reply/compose", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -158,26 +189,19 @@ export function ReplyComposer(props: {
 
     try {
       await readNdjsonStream<
+        | { type: "draft"; draft: { draftId: string; composeRunId: string; composeRunLogDir: string } }
         | ({ type: "progress" } & ReplyCompositionProgressEvent)
         | { type: "result"; result: ReplyCompositionResult | ReplyCompositionBatchResult }
         | { type: "error"; error: string }
       >(response, (event) => {
+        if (event.type === "draft") {
+          setDraftHistory((current) => applyDraftRefToLeadingRunningDraft(current, event.draft));
+          return;
+        }
+
         if (event.type === "progress") {
           setProgressEvents((current) => [...current, event]);
-          setDraftHistory((current) =>
-            current.map((item, index) =>
-              index === 0 && item.draftId.startsWith("local-running-")
-                ? {
-                    ...item,
-                    updatedAt: new Date().toISOString(),
-                    progressStage: event.stage,
-                    progressMessage: event.message,
-                    progressDetail: event.detail ?? null,
-                    requestGoal: event.goal ?? item.requestGoal
-                  }
-                : item
-            )
-          );
+          setDraftHistory((current) => applyProgressToLeadingRunningDraft(current, event));
           return;
         }
 
@@ -192,35 +216,13 @@ export function ReplyComposer(props: {
 
         if (event.type === "error") {
           setErrorMessage(event.error);
-          setDraftHistory((current) =>
-            current.map((item, index) =>
-              index === 0 && item.draftId.startsWith("local-running-")
-                ? {
-                    ...item,
-                    status: "failed",
-                    updatedAt: new Date().toISOString(),
-                    errorMessage: event.error
-                  }
-                : item
-            )
-          );
+          setDraftHistory((current) => markLeadingRunningDraftFailed(current, event.error));
         }
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Reply stream was unavailable";
       setErrorMessage(message);
-      setDraftHistory((current) =>
-        current.map((item, index) =>
-          index === 0 && item.draftId.startsWith("local-running-")
-            ? {
-                ...item,
-                status: "failed",
-                updatedAt: new Date().toISOString(),
-                errorMessage: message
-              }
-            : item
-        )
-      );
+      setDraftHistory((current) => markLeadingRunningDraftFailed(current, message));
     }
 
     await loadDraftHistory();
@@ -316,7 +318,7 @@ export function ReplyComposer(props: {
 
               <div className="tt-subpanel-soft">
                 <p className="tt-copy">
-                  The server asks `gemini` for a reply plan, runs `x-media-analyst search facets` with those queries, then asks `gemini` again to choose the best candidate and draft the final reply. `Compose all goals` reuses the same subject context once, then fans out across goals up to this concurrency cap.
+                  The server asks `gemini` for a reply plan, runs `x-media-analyst search facets` with those queries, then asks `gemini` again to choose the best candidate and draft the final reply. `Compose all goals` reuses the same subject context once, then fans out across goals up to this concurrency cap. If source analysis is still catching up, drafting continues from tweet text and whatever saved context is already available.
                 </p>
               </div>
 
@@ -436,6 +438,9 @@ export function ReplyComposer(props: {
                 <h2 className="section-title mt-3">
                   {results.length === 1 ? "Single reply/media pairing" : `${results.length} reply/media pairings to compare`}
                 </h2>
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                  Each result now keeps a much larger local media candidate set. The shared draft card shows the first 8 options by default, with a toggle to expand the full saved pool when you need it.
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {results.map((item) => (
@@ -447,29 +452,19 @@ export function ReplyComposer(props: {
             </div>
 
             <div className="grid gap-4 xl:grid-cols-2">
-              {results.map((item) => (
+              {results.map((item, index) => (
                 <article key={`${item.request.goal}-${item.reply.text}`} className="terminal-window">
                   <div className="window-bar">
                     <div className="section-kicker">{item.request.goal}</div>
                     <div className="flex flex-wrap gap-2">
                       <span className="tt-chip">{item.provider}</span>
-                      <span className="tt-chip">{item.search.resultCount} candidates</span>
+                      <span className="tt-chip">{item.search.resultCount} unique saved</span>
+                      {typeof item.search.rawResultCount === "number" ? (
+                        <span className="tt-chip">{item.search.rawResultCount} raw hits</span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="panel-body space-y-4">
-                    <div className="tt-subpanel">
-                      <p className="text-base leading-7 text-slate-100">{item.reply.text}</p>
-                    </div>
-
-                    <PostToXButton
-                      mode="reply"
-                      text={item.reply.text}
-                      mediaFilePath={item.selectedMedia?.videoFilePath ?? item.selectedMedia?.localFilePath ?? null}
-                      replyToTweetUrl={item.subject.tweetUrl}
-                      draftTitle={`${item.request.goal} reply`}
-                      scratchpadText={item.reply.postingNotes ?? item.reply.whyThisReplyWorks}
-                    />
-
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="tt-subpanel-soft">
                         <div className="tt-data-label">Angle</div>
@@ -482,104 +477,31 @@ export function ReplyComposer(props: {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {item.search.queries.map((query) => (
-                        <span key={`${item.request.goal}-${query}`} className="tt-chip">
-                          {query}
+                      {(item.search.queryOutcomes ?? item.search.queries.map((query) => ({ query, resultCount: 0 }))).map((entry) => (
+                        <span key={`${item.request.goal}-${entry.query}`} className="tt-chip">
+                          {entry.query} {entry.resultCount > 0 ? `(${entry.resultCount})` : ""}
                         </span>
                       ))}
                     </div>
 
-                    {item.selectedMedia ? (
-                      <>
-                        <div className="tt-media-frame aspect-video">
-                          <MediaPreview
-                            alt={item.selectedMedia.tweetText ?? `${item.request.goal} reply media`}
-                            imageUrl={item.selectedMedia.displayUrl}
-                            videoFilePath={item.selectedMedia.videoFilePath}
-                          />
-                        </div>
-                        <div className="tt-subpanel-soft">
-                          <div className="tt-data-label">Selected Media</div>
-                          <p className="mt-2 text-sm leading-6 text-slate-200">
-                            {item.selectedMedia.tweetText ?? item.selectedMedia.analysis?.sceneDescription ?? "No candidate text"}
-                          </p>
-                          <p className="mt-3 text-sm leading-6 text-slate-200">{item.reply.mediaSelectionReason}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className="tt-chip">
-                            {item.selectedMedia.sourceType === "meme_template" ? "imported meme template" : "captured media"}
-                          </span>
-                          <span className="tt-chip">{item.selectedMedia.authorUsername ?? "unknown author"}</span>
-                          {item.selectedMedia.analysis?.primaryEmotion ? (
-                            <span className="tt-chip">{item.selectedMedia.analysis.primaryEmotion}</span>
-                          ) : null}
-                          {item.selectedMedia.analysis?.conveys ? (
-                            <span className="tt-chip">{item.selectedMedia.analysis.conveys}</span>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-wrap gap-3">
-                          {item.selectedMedia.usageId ? (
-                            <Link href={`/usage/${item.selectedMedia.usageId}`} className="tt-link">
-                              <span>Open source usage</span>
-                            </Link>
-                          ) : null}
-                          {getPreferredXStatusUrl(item.selectedMedia.tweetUrl) ? (
-                            <a
-                              href={getPreferredXStatusUrl(item.selectedMedia.tweetUrl) as string}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="tt-link"
-                            >
-                              <span>Open source tweet</span>
-                            </a>
-                          ) : null}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="tt-subpanel">
-                        <p className="text-sm leading-7 text-slate-200">No strong media match was selected. This option is text-only.</p>
-                      </div>
-                    )}
-
-                    {item.reply.postingNotes ? (
-                      <div className="tt-subpanel-soft">
-                        <div className="tt-data-label">Posting Notes</div>
-                        <p className="mt-2 text-sm leading-6 text-slate-200">{item.reply.postingNotes}</p>
-                      </div>
-                    ) : null}
+                    <DraftOutputCard
+                      draftId={`live-reply-${index}-${item.request.goal}`}
+                      draftKind="reply"
+                      output={buildDraftOutputFromReplyResult(item)}
+                      outputIndex={0}
+                      replyTargetUrl={item.subject.tweetUrl}
+                      draftTitle={`${item.request.goal} reply`}
+                      regenerateReplyRequest={{
+                        usageId: item.request.usageId ?? null,
+                        tweetId: item.request.tweetId ?? null,
+                        goal: item.request.goal
+                      }}
+                      onRegenerated={async () => {
+                        await loadDraftHistory();
+                      }}
+                    />
 
                     {item.search.warning ? <div className="tt-chip tt-chip-danger">{item.search.warning}</div> : null}
-
-                    {item.alternativeMedia.length > 0 ? (
-                      <details className="tt-subpanel-soft">
-                        <summary className="cursor-pointer list-none font-[family:var(--font-mono)] text-xs uppercase tracking-[0.18em] text-cyan">
-                          Alternatives ({item.alternativeMedia.length})
-                        </summary>
-                        <div className="tt-alternatives-list">
-                          {item.alternativeMedia.map((candidate) => (
-                            <div key={candidate.candidateId} className="tt-alternative-card">
-                              <div className="tt-media-frame mb-3 aspect-video">
-                                <MediaPreview
-                                  alt={candidate.tweetText ?? "alternate reply media"}
-                                  imageUrl={candidate.displayUrl}
-                                  videoFilePath={candidate.videoFilePath}
-                                />
-                              </div>
-                              <div className="mb-2 flex flex-wrap gap-2">
-                                <span className="tt-chip">
-                                  {candidate.sourceType === "meme_template" ? "imported meme template" : "captured media"}
-                                </span>
-                                <span className="tt-chip">{candidate.authorUsername ?? "unknown"}</span>
-                                <span className="tt-chip">{candidate.combinedScore.toFixed(2)}</span>
-                              </div>
-                              <p className="text-sm leading-6 text-slate-200">
-                                {candidate.analysis?.sceneDescription ?? candidate.tweetText ?? "No description"}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    ) : null}
                   </div>
                 </article>
               ))}
@@ -611,33 +533,26 @@ export function ReplyComposer(props: {
                       </span>
                     </div>
                     {draft.progressMessage ? <p className="text-sm leading-6 text-slate-300">{draft.progressMessage}</p> : null}
+                    <ComposeRunReference draft={draft} />
                     {draft.errorMessage ? <p className="mt-2 text-sm leading-6 text-rose-300">{draft.errorMessage}</p> : null}
                     {draft.outputs.map((output, index) => (
-                      <div key={`${draft.draftId}-${index}`} className="mt-3 border border-white/10 bg-black/10 p-3">
-                        <div className="mb-2 flex flex-wrap gap-2">
-                          {output.goal ? <span className="tt-chip">{output.goal}</span> : null}
-                          {output.selectedMediaSourceType ? <span className="tt-chip">{output.selectedMediaSourceType}</span> : null}
-                        </div>
-                        <p className="text-sm leading-7 text-slate-100">{output.text}</p>
-                        {output.mediaSelectionReason ? <p className="mt-2 text-sm leading-6 text-slate-300">{output.mediaSelectionReason}</p> : null}
-                        <div className="mt-3">
-                          <PostToXButton
-                            mode="reply"
-                            text={output.text}
-                            mediaFilePath={output.selectedMediaVideoFilePath ?? output.selectedMediaLocalFilePath ?? null}
-                            replyToTweetUrl={props.subject.tweetUrl}
-                            draftTitle={output.goal ? `${output.goal} reply` : "reply draft"}
-                            scratchpadText={output.postingNotes ?? output.whyThisWorks}
-                            draftId={draft.draftId}
-                            outputIndex={index}
-                            initialSavedAt={output.typefullySavedAt}
-                            initialPrivateUrl={output.typefullyPrivateUrl}
-                            initialShareUrl={output.typefullyShareUrl}
-                            initialDraftStatus={output.typefullyStatus}
-                            initialDraftId={output.typefullyDraftId}
-                            initialError={output.typefullyError}
-                          />
-                        </div>
+                      <div key={`${draft.draftId}-${index}`} className="mt-3">
+                        <DraftOutputCard
+                          draftId={draft.draftId}
+                          draftKind="reply"
+                          output={output}
+                          outputIndex={index}
+                          replyTargetUrl={props.subject.tweetUrl}
+                          draftTitle={output.goal ? `${output.goal} reply` : "reply draft"}
+                          regenerateReplyRequest={{
+                            usageId: draft.usageId,
+                            tweetId: draft.tweetId,
+                            goal: draft.requestGoal ?? output.goal
+                          }}
+                          onRegenerated={async () => {
+                            await loadDraftHistory();
+                          }}
+                        />
                       </div>
                     ))}
                   </div>

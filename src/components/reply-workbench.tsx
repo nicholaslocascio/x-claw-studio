@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ManualPostComposer } from "@/src/components/manual-post-composer";
 import { ReplyComposer } from "@/src/components/reply-composer";
 import type { ReplySourceLookupResult } from "@/src/lib/reply-composer";
 import { getPreferredXStatusUrl } from "@/src/lib/x-status-url";
@@ -20,6 +21,7 @@ function formatDate(value: string | null | undefined): string {
 export function ReplyWorkbench(props: {
   initialUrl?: string;
 }) {
+  const [mode, setMode] = useState<"reply" | "manual_post">("reply");
   const [xUrl, setXUrl] = useState(props.initialUrl ?? "");
   const [resolved, setResolved] = useState<ReplySourceLookupResult | null>(null);
   const [isResolving, setIsResolving] = useState(false);
@@ -74,22 +76,51 @@ export function ReplyWorkbench(props: {
 
   return (
     <>
+      <section className="relative z-10 mb-6 terminal-window">
+        <div className="window-bar">
+          <div>
+            <div className="section-kicker">Compose</div>
+            <div className="mt-2 text-sm text-muted">
+              Reply to a tweet or turn notes into a new post.
+            </div>
+          </div>
+          <div className="window-dots">
+            <span className="window-dot bg-orange" />
+            <span className="window-dot bg-accent" />
+            <span className="window-dot bg-cyan" />
+          </div>
+        </div>
+        <div className="panel-body">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={`tt-link ${mode === "reply" ? "tt-chip-accent" : ""}`} onClick={() => setMode("reply")}>
+              <span>Reply</span>
+            </button>
+            <button type="button" className={`tt-link ${mode === "manual_post" ? "tt-chip-accent" : ""}`} onClick={() => setMode("manual_post")}>
+              <span>New post</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {mode === "manual_post" ? <ManualPostComposer /> : null}
+
+      {mode === "reply" ? (
       <section className="relative z-10 mb-8 terminal-panel">
         <div className="panel-body">
           <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="section-kicker">Reply Lab</div>
-              <h1 className="section-title mt-3">Load one tweet, analyze it, then generate reply options.</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-                Paste a single X status URL. The app checks local captures first, falls back to the X API when needed, analyzes the first media usage if one exists, then hands the tweet to the shared reply composer.
+              <div className="section-kicker">Reply</div>
+              <h1 className="section-title mt-3">Load a tweet and draft a reply</h1>
+              <p className="page-intro mt-3 max-w-3xl">
+                Paste a tweet URL to pull in the source, review the context, and start drafting.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link href="/" className="tt-link">
-                <span>Dashboard</span>
+                <span>Back to home</span>
               </Link>
               <Link href="/tweets" className="tt-link">
-                <span>Tweet browser</span>
+                <span>Browse tweets</span>
               </Link>
             </div>
           </div>
@@ -102,13 +133,13 @@ export function ReplyWorkbench(props: {
             }}
           >
             <label className="tt-field">
-              <span className="tt-field-label">X Status URL</span>
+              <span className="tt-field-label">Tweet URL</span>
               <input
                 type="url"
                 value={xUrl}
                 onChange={(event) => setXUrl(event.target.value)}
                 className="tt-input"
-                placeholder="https://x.com/user/status/1234567890"
+                placeholder="https://x.com/.../status/..."
                 autoCapitalize="off"
                 autoCorrect="off"
                 spellCheck={false}
@@ -121,16 +152,16 @@ export function ReplyWorkbench(props: {
 
           <div className="mt-4 grid gap-3 lg:grid-cols-3">
             <article className="tt-subpanel-soft">
-              <div className="tt-data-label">1. Resolve</div>
-              <p className="mt-3 text-sm leading-6 text-slate-200">Use local captures if we already have the tweet. Otherwise fetch and save it through the existing X API capture path.</p>
+              <div className="tt-data-label">1. Load</div>
+              <p className="mt-3 text-sm leading-6 text-slate-200">Bring in the tweet from saved data or capture it now if it is missing.</p>
             </article>
             <article className="tt-subpanel-soft">
-              <div className="tt-data-label">2. Analyze</div>
-              <p className="mt-3 text-sm leading-6 text-slate-200">If the tweet has media and its first usage is still pending, run the normal analysis pipeline before composing.</p>
+              <div className="tt-data-label">2. Review</div>
+              <p className="mt-3 text-sm leading-6 text-slate-200">Check the source tweet and any saved analysis before you draft.</p>
             </article>
             <article className="tt-subpanel-soft">
               <div className="tt-data-label">3. Draft</div>
-              <p className="mt-3 text-sm leading-6 text-slate-200">Use the same shared reply composer for one goal or all goals, with tone, angle, and constraint steering.</p>
+              <p className="mt-3 text-sm leading-6 text-slate-200">Generate a reply, refine the angle, and save the version you want to keep.</p>
             </article>
           </div>
 
@@ -141,13 +172,14 @@ export function ReplyWorkbench(props: {
           ) : null}
         </div>
       </section>
+      ) : null}
 
-      {resolved ? (
+      {mode === "reply" && resolved ? (
         <section className="relative z-10 mb-8 terminal-window">
           <div className="window-bar">
             <div>
-              <div className="section-kicker">Loaded Tweet</div>
-              <div className="mt-2 font-[family:var(--font-mono)] text-xs uppercase tracking-[0.18em] text-muted">
+              <div className="section-kicker">Loaded tweet</div>
+              <div className="mt-2 font-[family:var(--font-mono)] text-xs tracking-[0.18em] text-muted">
                 &gt; {resolved.tweetId}
               </div>
             </div>
@@ -160,10 +192,14 @@ export function ReplyWorkbench(props: {
           <div className="panel-body">
             <div className="mb-4 flex flex-wrap gap-2">
               <span className={`tt-chip ${resolved.source === "x_api" ? "tt-chip-accent" : ""}`}>
-                {resolved.source === "local" ? "loaded from local data" : "captured from X API"}
+                {resolved.source === "local" ? "loaded from saved data" : "captured from X"}
               </span>
-              <span className="tt-chip">
-                {resolved.analysisStatus === "complete" ? "analysis ready" : "text-only source"}
+              <span className={`tt-chip ${resolved.analysisStatus === "pending" ? "tt-chip-accent" : ""}`}>
+                {resolved.analysisStatus === "complete"
+                  ? "analysis ready"
+                  : resolved.analysisStatus === "pending"
+                    ? "analysis running"
+                    : "text only"}
               </span>
               <span className="tt-chip">{resolved.subject.mediaKind}</span>
             </div>
@@ -186,15 +222,20 @@ export function ReplyWorkbench(props: {
                   ) : null}
                   {resolved.usageId ? (
                     <Link href={`/usage/${resolved.usageId}`} className="tt-link">
-                      <span>Open usage detail</span>
+                      <span>Open media detail</span>
                     </Link>
                   ) : null}
                 </div>
               </article>
 
               <article className="tt-subpanel-soft">
-                <div className="tt-data-label">Analysis Snapshot</div>
+                <div className="tt-data-label">Analysis snapshot</div>
                 <div className="mt-3 space-y-3 text-sm leading-6 text-slate-200">
+                  {resolved.analysisStatus === "pending" ? (
+                    <p className="rounded border border-accent/40 bg-accent/10 px-3 py-2 text-slate-100">
+                      The tweet is loaded. Media analysis is still running in the background, so drafting can start before these fields fill in.
+                    </p>
+                  ) : null}
                   <p><strong className="text-slate-100">Scene:</strong> {resolved.subject.analysis.sceneDescription ?? "Not available"}</p>
                   <p><strong className="text-slate-100">Conveys:</strong> {resolved.subject.analysis.conveys ?? "Not available"}</p>
                   <p><strong className="text-slate-100">Emotion:</strong> {resolved.subject.analysis.primaryEmotion ?? "Not available"}</p>
@@ -206,7 +247,7 @@ export function ReplyWorkbench(props: {
         </section>
       ) : null}
 
-      {resolved ? (
+      {mode === "reply" && resolved ? (
         <ReplyComposer
           usageId={resolved.usageId ?? undefined}
           tweetId={resolved.tweetId}

@@ -105,7 +105,10 @@ describe("parseSearchFacetCliArgs", () => {
       query: "dashboard",
       facetName: "conveys",
       limit: 5,
-      format: "jsonl"
+      format: "jsonl",
+      highQualityOnly: true,
+      allFacetsMode: "combined_blob",
+      hardMatchMode: "off"
     });
   });
 
@@ -114,7 +117,29 @@ describe("parseSearchFacetCliArgs", () => {
       query: "dashboard",
       facetName: "conveys",
       limit: 20,
-      format: "json"
+      format: "json",
+      highQualityOnly: true,
+      allFacetsMode: "combined_blob",
+      hardMatchMode: "off"
+    });
+  });
+
+  it("accepts video-only and all-results flags", () => {
+    expect(parseSearchFacetCliArgs(["--query", "reaction", "--video-only", "--all"])).toMatchObject({
+      mediaKinds: ["video", "video_hls", "video_blob"],
+      highQualityOnly: false
+    });
+  });
+
+  it("accepts the combined all-facets mode", () => {
+    expect(parseSearchFacetCliArgs(["--query", "reaction", "--all-facets-mode", "combined_blob"])).toMatchObject({
+      allFacetsMode: "combined_blob"
+    });
+  });
+
+  it("accepts an explicit hard-match mode", () => {
+    expect(parseSearchFacetCliArgs(["--query", "celebrity", "--hard-match-mode", "intent"])).toMatchObject({
+      hardMatchMode: "intent"
     });
   });
 });
@@ -126,6 +151,14 @@ describe("buildAgentFacetSearchPayload", () => {
       query: "dashboard",
       facetName: "conveys",
       limit: 5,
+      vectorStatus: "ok",
+      warningMessage: null,
+      filters: {
+        mediaKinds: null,
+        highQualityOnly: true,
+        allFacetsMode: "combined_blob",
+        hardMatchMode: "off"
+      },
       results: [
         {
           id: "usage-1::conveys",
@@ -154,9 +187,11 @@ describe("buildAgentFacetSearchPayload", () => {
             createdAt: "2026-03-10T12:00:00.000Z",
             mediaIndex: 0,
             duplicateGroupId: "dup-1",
+            duplicateGroupUsageCount: 2,
             hotnessScore: 0.75,
             mediaAssetStarred: true,
-            mediaAssetUsageCount: 3
+            mediaAssetUsageCount: 3,
+            phashMatchCount: 0
           },
           vectorDistance: 0.2,
           vectorScore: 0.9,
@@ -173,6 +208,12 @@ describe("buildAgentFacetSearchPayload", () => {
       command: "search-facets",
       query: "dashboard",
       result_count: 1,
+      filters: {
+        mediaKinds: null,
+        highQualityOnly: true,
+        allFacetsMode: "combined_blob",
+        hardMatchMode: "off"
+      },
       facet: {
         name: "conveys"
       }

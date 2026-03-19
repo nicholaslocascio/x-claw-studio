@@ -1,4 +1,5 @@
 import "@/src/lib/env";
+import { syncFacetSearchAssetIndex } from "@/src/server/chroma-facets";
 import { getDashboardData } from "@/src/server/data";
 import { syncMediaAssetIndex, syncMediaAssetSummaries } from "@/src/server/media-assets";
 
@@ -13,6 +14,11 @@ async function main() {
     usages: data.tweetUsages,
     assetIndex: indexSync.index,
     forceFullRebuild: true
+  });
+  await syncFacetSearchAssetIndex({
+    summaries: summaries.file.summaries,
+    usages: data.tweetUsages,
+    assetIds: summaries.touchedAssetIds
   });
 
   console.log(

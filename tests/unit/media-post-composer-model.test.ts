@@ -2,16 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GeminiCliMediaPostComposerModel } from "@/src/server/media-post-composer-model";
 import type { MediaPostRequest, MediaPostSubject } from "@/src/lib/media-post-composer";
 
-const { runGeminiPromptMock } = vi.hoisted(() => ({
-  runGeminiPromptMock: vi.fn()
+const { runComposePromptWithProviderMock } = vi.hoisted(() => ({
+  runComposePromptWithProviderMock: vi.fn()
 }));
 
-vi.mock("@/src/server/gemini-cli-json", async () => {
-  const actual = await vi.importActual<typeof import("@/src/server/gemini-cli-json")>("@/src/server/gemini-cli-json");
+vi.mock("@/src/server/compose-model-cli", async () => {
+  const actual = await vi.importActual<typeof import("@/src/server/compose-model-cli")>("@/src/server/compose-model-cli");
 
   return {
     ...actual,
-    runGeminiPrompt: runGeminiPromptMock
+    runComposePromptWithProvider: runComposePromptWithProviderMock
   };
 });
 
@@ -55,11 +55,11 @@ const subject: MediaPostSubject = {
 
 describe("GeminiCliMediaPostComposerModel", () => {
   beforeEach(() => {
-    runGeminiPromptMock.mockReset();
+    runComposePromptWithProviderMock.mockReset();
   });
 
   it("runs a cleanup pass before returning the media-led draft", async () => {
-    runGeminiPromptMock
+    runComposePromptWithProviderMock
       .mockResolvedValueOnce(
         JSON.stringify({
           response: JSON.stringify({
@@ -100,8 +100,8 @@ describe("GeminiCliMediaPostComposerModel", () => {
       candidates: []
     });
 
-    expect(runGeminiPromptMock).toHaveBeenCalledTimes(2);
-    expect(runGeminiPromptMock.mock.calls[1]?.[0]).toContain("cleaning a generated media-led X post");
+    expect(runComposePromptWithProviderMock).toHaveBeenCalledTimes(2);
+    expect(runComposePromptWithProviderMock.mock.calls[1]?.[1]?.prompt).toContain("cleaning a generated media-led X post");
     expect(draft.selectedCandidateId).toBe("candidate-9");
     expect(draft.tweetText).toBe("This bottlecap computer isn't cute-it's a receipt for infra bloat.");
   });

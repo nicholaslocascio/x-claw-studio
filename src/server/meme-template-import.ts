@@ -220,7 +220,7 @@ export async function importWishlistMemeFromMemingWorld(
   options?.onProgress?.({
     stage: "summarizing",
     key: entry.key,
-    message: "Gemini is summarizing how the meme is generally used",
+    message: "Agent is summarizing how the meme is generally used",
     detail: `${assets.baseTemplateImageUrls.length} base | ${assets.exampleImageUrls.length} examples`
   });
   const summary = await summarizeMemingWorldMeme({

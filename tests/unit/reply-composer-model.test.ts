@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseGeminiJsonResponse } from "@/src/server/gemini-cli-json";
 import { replyCompositionDraftSchema, replyCompositionPlanSchema } from "@/src/lib/reply-composer";
-import { GeminiCliReplyComposerModel } from "@/src/server/reply-composer-model";
+import { createReplyComposerModel, GeminiCliReplyComposerModel } from "@/src/server/reply-composer-model";
 
-const { runGeminiPromptMock } = vi.hoisted(() => ({
-  runGeminiPromptMock: vi.fn()
+const { runComposePromptWithProviderMock } = vi.hoisted(() => ({
+  runComposePromptWithProviderMock: vi.fn()
 }));
 
-vi.mock("@/src/server/gemini-cli-json", async () => {
-  const actual = await vi.importActual<typeof import("@/src/server/gemini-cli-json")>("@/src/server/gemini-cli-json");
+vi.mock("@/src/server/compose-model-cli", async () => {
+  const actual = await vi.importActual<typeof import("@/src/server/compose-model-cli")>("@/src/server/compose-model-cli");
 
   return {
     ...actual,
-    runGeminiPrompt: runGeminiPromptMock
+    runComposePromptWithProvider: runComposePromptWithProviderMock
   };
 });
 
@@ -30,6 +30,8 @@ const subject = {
   createdAt: "2026-03-11T10:00:00.000Z",
   tweetText: "Cloudflare is betraying the open web.",
   mediaKind: "image",
+  localFilePath: "data/raw/source-image.jpg",
+  playableFilePath: null,
   analysis: {
     captionBrief: null,
     sceneDescription: null,
@@ -46,7 +48,8 @@ const subject = {
 
 describe("parseGeminiJsonResponse", () => {
   beforeEach(() => {
-    runGeminiPromptMock.mockReset();
+    runComposePromptWithProviderMock.mockReset();
+    delete process.env.COMPOSE_MODEL_PROVIDER;
   });
 
   it("parses the Gemini CLI JSON envelope response field", () => {
@@ -110,7 +113,7 @@ describe("parseGeminiJsonResponse", () => {
   });
 
   it("runs a second cleanup pass before returning a composed reply", async () => {
-    runGeminiPromptMock
+    runComposePromptWithProviderMock
       .mockResolvedValueOnce(
         JSON.stringify({
           response: JSON.stringify({
@@ -163,15 +166,73 @@ describe("parseGeminiJsonResponse", () => {
       candidates: []
     });
 
-    expect(runGeminiPromptMock).toHaveBeenCalledTimes(3);
-    expect(runGeminiPromptMock.mock.calls[1]?.[0]).toContain("cleaning a generated X reply draft");
-    expect(runGeminiPromptMock.mock.calls[2]?.[0]).toContain("cleaning a generated X reply draft");
+    expect(runComposePromptWithProviderMock).toHaveBeenCalledTimes(3);
+    expect(runComposePromptWithProviderMock.mock.calls[1]?.[1]?.prompt).toContain("cleaning a generated X reply draft");
+    expect(runComposePromptWithProviderMock.mock.calls[2]?.[1]?.prompt).toContain("cleaning a generated X reply draft");
     expect(draft.selectedCandidateId).toBe("candidate-1");
     expect(draft.replyText).toBe("cloudflare guy who keeps calling the toll booth open infrastructure");
   });
 
+  it("attaches the source image to compose and cleanup calls when available", async () => {
+    runComposePromptWithProviderMock
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          response: JSON.stringify({
+            replyText: "the toll booth was always the product",
+            selectedCandidateId: null,
+            mediaSelectionReason: "text-only landed cleaner",
+            whyThisReplyWorks: "it stays grounded in the source image",
+            postingNotes: null
+          })
+        })
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          response: JSON.stringify({
+            replyText: "the toll booth was always the product",
+            selectedCandidateId: null,
+            mediaSelectionReason: "text-only landed cleaner",
+            whyThisReplyWorks: "it stays grounded in the source image",
+            postingNotes: null
+          })
+        })
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          response: JSON.stringify({
+            replyText: "the toll booth was always the product",
+            selectedCandidateId: null,
+            mediaSelectionReason: "text-only landed cleaner",
+            whyThisReplyWorks: "it stays grounded in the source image",
+            postingNotes: null
+          })
+        })
+      );
+
+    const model = createReplyComposerModel();
+    await model.composeReply({
+      request,
+      subject,
+      plan: {
+        stance: "agree",
+        angle: "reframe it as the business model",
+        tone: "dry",
+        intentSummary: "pile on",
+        targetEffect: "keep the original image context in play",
+        searchQueries: ["toll booth reaction", "grim agreement"],
+        moodKeywords: ["grim", "dry"],
+        candidateSelectionCriteria: ["stays grounded", "does not overexplain"],
+        avoid: ["generic"]
+      },
+      candidates: []
+    });
+
+    expect(runComposePromptWithProviderMock.mock.calls[0]?.[1]?.imagePaths).toEqual(["data/raw/source-image.jpg"]);
+    expect(runComposePromptWithProviderMock.mock.calls[1]?.[1]?.imagePaths).toEqual(["data/raw/source-image.jpg"]);
+  });
+
   it("normalizes oversized plan fields and null draft explanations", async () => {
-    runGeminiPromptMock
+    runComposePromptWithProviderMock
       .mockResolvedValueOnce(
         JSON.stringify({
           response: JSON.stringify({
@@ -228,5 +289,19 @@ describe("parseGeminiJsonResponse", () => {
     expect(plan.candidateSelectionCriteria[0]?.length).toBeLessThanOrEqual(160);
     expect(draft.mediaSelectionReason).toBe("no candidate selected");
     expect(draft.whyThisReplyWorks).toBe("keeps the reply postable and on-angle");
+  });
+
+  it("defaults the reply composer factory to codex exec", () => {
+    const model = createReplyComposerModel();
+
+    expect(model.providerId).toBe("codex-exec");
+  });
+
+  it("can switch the reply composer factory back to Gemini CLI", () => {
+    process.env.COMPOSE_MODEL_PROVIDER = "gemini-cli";
+
+    const model = createReplyComposerModel();
+
+    expect(model.providerId).toBe("gemini-cli");
   });
 });

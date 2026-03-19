@@ -1,6 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  applyDraftRefToLeadingRunningDraft,
+  applyProgressToLeadingRunningDraft,
+  buildLocalRunningDraft,
+  fetchGeneratedDraftHistory,
+  markLeadingRunningDraftFailed,
+  prependLocalRunningDraft
+} from "@/src/components/compose-client";
+import { ComposeRunReference } from "@/src/components/compose-run-reference";
 import { MediaPreview } from "@/src/components/media-preview";
 import { PostToXButton } from "@/src/components/post-to-x-button";
 import type { GeneratedDraftRecord } from "@/src/lib/generated-drafts";
@@ -16,21 +25,6 @@ function formatDate(value: string | null | undefined): string {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
-}
-
-async function fetchMediaDraftHistory(usageId: string): Promise<GeneratedDraftRecord[]> {
-  const params = new URLSearchParams({
-    kind: "media_post",
-    usageId,
-    limit: "12"
-  });
-  const response = await fetch(`/api/generated-drafts?${params.toString()}`);
-  if (!response.ok) {
-    return [];
-  }
-
-  const body = await response.json();
-  return body.drafts ?? [];
 }
 
 export function MediaTweetComposer(props: {
@@ -64,14 +58,14 @@ export function MediaTweetComposer(props: {
   const latestProgress = progressEvents.at(-1) ?? null;
 
   async function loadDraftHistory(): Promise<void> {
-    setDraftHistory(await fetchMediaDraftHistory(props.usageId));
+    setDraftHistory(await fetchGeneratedDraftHistory({ kind: "media_post", usageId: props.usageId, limit: 12 }));
   }
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
-      const drafts = await fetchMediaDraftHistory(props.usageId);
+      const drafts = await fetchGeneratedDraftHistory({ kind: "media_post", usageId: props.usageId, limit: 12 });
       if (!cancelled) {
         setDraftHistory(drafts);
       }
@@ -87,27 +81,18 @@ export function MediaTweetComposer(props: {
     setErrorMessage(null);
     setResult(null);
     setProgressEvents([]);
-    setDraftHistory((current) => [
-      {
-        draftId: `local-running-${Date.now()}`,
-        kind: "media_post",
-        status: "running",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        usageId: props.usageId,
-        tweetId: null,
-        topicId: null,
-        assetId: props.assetId,
-        requestGoal: null,
-        requestMode: "single",
-        progressStage: "starting",
-        progressMessage: "Starting media composition",
-        progressDetail: null,
-        errorMessage: null,
-        outputs: []
-      },
-      ...current.filter((item) => !item.draftId.startsWith("local-running-"))
-    ]);
+    setDraftHistory((current) =>
+      prependLocalRunningDraft(
+        current,
+        buildLocalRunningDraft({
+          kind: "media_post",
+          usageId: props.usageId,
+          assetId: props.assetId,
+          requestMode: "single",
+          progressMessage: "Starting media composition"
+        })
+      )
+    );
 
     const response = await fetch("/api/media/compose", {
       method: "POST",
@@ -124,18 +109,7 @@ export function MediaTweetComposer(props: {
       const body = await response.json();
       const message = body.error || "Media composition failed";
       setErrorMessage(message);
-      setDraftHistory((current) =>
-        current.map((item, index) =>
-          index === 0 && item.draftId.startsWith("local-running-")
-            ? {
-                ...item,
-                status: "failed",
-                updatedAt: new Date().toISOString(),
-                errorMessage: message
-              }
-            : item
-        )
-      );
+      setDraftHistory((current) => markLeadingRunningDraftFailed(current, message));
       setIsRunning(false);
       await loadDraftHistory();
       return;
@@ -143,25 +117,19 @@ export function MediaTweetComposer(props: {
 
     try {
       await readNdjsonStream<
+        | { type: "draft"; draft: { draftId: string; composeRunId: string; composeRunLogDir: string } }
         | ({ type: "progress" } & MediaPostProgressEvent)
         | { type: "result"; result: MediaPostResult }
         | { type: "error"; error: string }
       >(response, (event) => {
+        if (event.type === "draft") {
+          setDraftHistory((current) => applyDraftRefToLeadingRunningDraft(current, event.draft));
+          return;
+        }
+
         if (event.type === "progress") {
           setProgressEvents((current) => [...current, event]);
-          setDraftHistory((current) =>
-            current.map((item, index) =>
-              index === 0 && item.draftId.startsWith("local-running-")
-                ? {
-                    ...item,
-                    updatedAt: new Date().toISOString(),
-                    progressStage: event.stage,
-                    progressMessage: event.message,
-                    progressDetail: event.detail ?? null
-                  }
-                : item
-            )
-          );
+          setDraftHistory((current) => applyProgressToLeadingRunningDraft(current, event));
           return;
         }
 
@@ -172,35 +140,13 @@ export function MediaTweetComposer(props: {
 
         if (event.type === "error") {
           setErrorMessage(event.error);
-          setDraftHistory((current) =>
-            current.map((item, index) =>
-              index === 0 && item.draftId.startsWith("local-running-")
-                ? {
-                    ...item,
-                    status: "failed",
-                    updatedAt: new Date().toISOString(),
-                    errorMessage: event.error
-                  }
-                : item
-            )
-          );
+          setDraftHistory((current) => markLeadingRunningDraftFailed(current, event.error));
         }
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Media composition stream was unavailable";
       setErrorMessage(message);
-      setDraftHistory((current) =>
-        current.map((item, index) =>
-          index === 0 && item.draftId.startsWith("local-running-")
-            ? {
-                ...item,
-                status: "failed",
-                updatedAt: new Date().toISOString(),
-                errorMessage: message
-              }
-            : item
-        )
-      );
+      setDraftHistory((current) => markLeadingRunningDraftFailed(current, message));
     }
 
     await loadDraftHistory();
@@ -437,6 +383,7 @@ export function MediaTweetComposer(props: {
                       <span className="tt-chip">{formatDate(draft.updatedAt)}</span>
                     </div>
                     {draft.progressMessage ? <p className="text-sm leading-6 text-slate-300">{draft.progressMessage}</p> : null}
+                    <ComposeRunReference draft={draft} />
                     {draft.outputs.map((output, index) => (
                       <div key={`${draft.draftId}-${index}`} className="mt-3 border border-white/10 bg-black/10 p-3">
                         <p className="text-sm leading-7 text-slate-100">{output.text}</p>
