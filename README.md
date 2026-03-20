@@ -61,37 +61,45 @@ If you care about going viral, this is the useful part: you are not just trackin
 
 ## Screenshots
 
-Put screenshots in [`docs/screenshots/`](/Users/nicklocascio/Projects/twitter-trend/docs/screenshots).
-
-Suggested filenames:
+Put screenshots in [`docs/screenshots/`](/Users/nicklocascio/Projects/twitter-trend/docs/screenshots) with these filenames:
 
 - `dashboard-home.png`
-- `tweet-browser.png`
+- `media-composer.png`
 - `media-search.png`
-- `topic-explorer.png`
-- `reply-composer.png`
+- `media-review.png`
 
-Once you add them, wire them into this section like this:
+Then this gallery will render as-is:
 
-```md
+### Home Dashboard
+
+The command center for capture, review, search, and composition.
+
 ![Home dashboard](docs/screenshots/dashboard-home.png)
+
+### Draft From A Media Asset
+
+Turn one saved asset into a new tweet with context, topic overlap, and angle hints.
+
+![Media composer](docs/screenshots/media-composer.png)
+
+### Search Reusable Media
+
+Search your local corpus by mood, message, subject, or meme shape.
+
 ![Media search](docs/screenshots/media-search.png)
-```
 
-Recommended gallery order:
+### Review What Is Repeating
 
-1. Home dashboard
-2. Tweet browser
-3. Media search
-4. Topic explorer
-5. Reply composer
+See which assets keep showing up, what is getting starred, and where the hotness is building.
+
+![Media review](docs/screenshots/media-review.png)
 
 Best practice:
 
-- Use wide screenshots from real data
-- Prefer one screenshot per core workflow
-- Avoid tiny cropped UI fragments
-- Show the repo doing work, not sitting empty
+- Use full-width screenshots from real data
+- Lead with the home dashboard first
+- Show one screenshot per core workflow
+- Favor dense, high-signal states over empty screens
 
 ## Stack
 
