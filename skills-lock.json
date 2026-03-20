@@ -2,7 +2,7 @@
   "version": 1,
   "skills": {
     "nano-banana-pro": {
-      "source": "/Users/nicklocascio/Projects/node_modules/openclaw/skills/nano-banana-pro",
+      "source": "openclaw/nano-banana-pro",
       "sourceType": "path",
       "computedHash": "7ec84bed00ba166a91561a35b4e777af3eca7285addc1f5dd3d447e8a36f8902"
     },

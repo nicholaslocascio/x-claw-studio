@@ -12,10 +12,10 @@ A 50-like post from a small account may be more instructive than a 20,000-like p
 
 ## Current Hooks We Can Reuse
 
-- [src/lib/types.ts](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
-- [src/server/x-api.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts)
-- [src/server/data.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts)
-- [src/server/trend-post-brief.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/trend-post-brief.ts)
+- [src/lib/types.ts](../../src/lib/types.ts)
+- [src/server/x-api.ts](../../src/server/x-api.ts)
+- [src/server/data.ts](../../src/server/data.ts)
+- [src/server/trend-post-brief.ts](../../src/server/trend-post-brief.ts)
 
 We already capture:
 

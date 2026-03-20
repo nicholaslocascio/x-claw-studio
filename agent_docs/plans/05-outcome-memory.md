@@ -18,10 +18,10 @@ Without that loop, the system can spot trends but cannot calibrate to a specific
 
 ## Current Hooks We Can Reuse
 
-- [src/server/generated-drafts.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/generated-drafts.ts)
-- [src/lib/generated-drafts.ts](/Users/nicklocascio/Projects/twitter-trend/src/lib/generated-drafts.ts)
-- [src/server/typefully.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/typefully.ts)
-- [src/server/x-api.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts)
+- [src/server/generated-drafts.ts](../../src/server/generated-drafts.ts)
+- [src/lib/generated-drafts.ts](../../src/lib/generated-drafts.ts)
+- [src/server/typefully.ts](../../src/server/typefully.ts)
+- [src/server/x-api.ts](../../src/server/x-api.ts)
 
 We already persist generated drafts. That gives us a natural spine for learning data.
 

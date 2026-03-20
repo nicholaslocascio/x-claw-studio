@@ -17,9 +17,9 @@ A topic can be hot while the winning format shifts from threads to quote tweets.
 
 ## Current Hooks We Can Reuse
 
-- [src/server/tweet-topics.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/tweet-topics.ts)
-- [src/server/trend-post-brief.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/trend-post-brief.ts)
-- [src/server/data.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts)
+- [src/server/tweet-topics.ts](../../src/server/tweet-topics.ts)
+- [src/server/trend-post-brief.ts](../../src/server/trend-post-brief.ts)
+- [src/server/data.ts](../../src/server/data.ts)
 
 ## Proposed New Artifact
 
@@ -60,7 +60,7 @@ This should live in a dedicated module rather than inside topic clustering.
 2. Read tweet-level format labels from topic-analysis records.
 3. Compute aggregate format clusters and hotness.
 4. Persist a cached format index to `data/analysis/formats/index.json`.
-5. Add a small server reader in [src/server/data.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts).
+5. Add a small server reader in [src/server/data.ts](../../src/server/data.ts).
 6. Add a compact UI surface first, probably on the homepage or topics page, before building a full dedicated route.
 
 ## UI Shape

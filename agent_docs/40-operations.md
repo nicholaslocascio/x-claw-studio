@@ -228,32 +228,32 @@ Dashboard read-model note:
 
 Relevant files:
 
-- [`src/lib/env.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/env.ts)
-- [`src/server/x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts)
-- [`src/server/x-api-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts)
-- [`src/cli/analyze-image-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/analyze-image-prompt.ts)
-- [`src/server/gemini-analysis-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/gemini-analysis-prompt.ts)
-- [`src/server/reply-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer-model.ts)
-- [`src/server/reply-media-search.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-media-search.ts)
-- [`src/server/chroma-facets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/chroma-facets.ts)
-- [`src/server/gemini-topic-analysis.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/gemini-topic-analysis.ts)
-- [`src/server/analyze-topics.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analyze-topics.ts)
-- [`src/server/topic-grounded-news.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/topic-grounded-news.ts)
-- [`Makefile`](/Users/nicklocascio/Projects/twitter-trend/Makefile)
+- [`src/lib/env.ts`](../src/lib/env.ts)
+- [`src/server/x-api.ts`](../src/server/x-api.ts)
+- [`src/server/x-api-capture.ts`](../src/server/x-api-capture.ts)
+- [`src/cli/analyze-image-prompt.ts`](../src/cli/analyze-image-prompt.ts)
+- [`src/server/gemini-analysis-prompt.ts`](../src/server/gemini-analysis-prompt.ts)
+- [`src/server/reply-composer-model.ts`](../src/server/reply-composer-model.ts)
+- [`src/server/reply-media-search.ts`](../src/server/reply-media-search.ts)
+- [`src/server/chroma-facets.ts`](../src/server/chroma-facets.ts)
+- [`src/server/gemini-topic-analysis.ts`](../src/server/gemini-topic-analysis.ts)
+- [`src/server/analyze-topics.ts`](../src/server/analyze-topics.ts)
+- [`src/server/topic-grounded-news.ts`](../src/server/topic-grounded-news.ts)
+- [`Makefile`](../Makefile)
 
 ## Where To Look When Something Breaks
 
-- Run didn’t start: [`src/server/run-control.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/run-control.ts)
-- Scheduler didn’t trigger: `data/control/scheduler.json` and [`src/cli/scheduler.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/scheduler.ts)
-- Crawl produced no tweets: crawl CLI plus [`src/server/x-api-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts) and [`src/server/x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts)
-- Analysis missing from UI: `data/analysis/tweet-usages/` and [`src/server/data.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts)
-- Similarity/grouping looks wrong: [`src/server/media-assets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-assets.ts)
-- Search results missing: [`src/server/chroma-facets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/chroma-facets.ts)
-- Compose run needs deeper debugging: inspect `data/analysis/compose-runs/<compose-run-id>/` first, then trace through [`src/server/compose-run-log.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/compose-run-log.ts), [`src/server/compose-model-cli.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/compose-model-cli.ts), and [`src/server/reply-media-search.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-media-search.ts).
-- Topic radar looks wrong or stale: [`src/server/tweet-topics.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/tweet-topics.ts), [`src/server/gemini-topic-analysis.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/gemini-topic-analysis.ts), `data/analysis/topic-tweets/`, and `data/analysis/topics/index.json`
-- Usage detail shows weak topic matches: inspect [`src/server/usage-details.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/usage-details.ts) for the query builder and [`src/server/chroma-facets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/chroma-facets.ts) for topic indexing/search.
-- Topic composer fails or picks weak media: inspect [`src/server/topic-composer.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/topic-composer.ts), [`src/server/topic-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/topic-composer-prompt.ts), and [`src/server/reply-media-search.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-media-search.ts).
-- Media composer drafts weak posts: inspect [`src/server/media-post-composer.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-post-composer.ts), [`src/server/media-post-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-post-composer-prompt.ts), and [`src/server/usage-details.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/usage-details.ts).
+- Run didn’t start: [`src/server/run-control.ts`](../src/server/run-control.ts)
+- Scheduler didn’t trigger: `data/control/scheduler.json` and [`src/cli/scheduler.ts`](../src/cli/scheduler.ts)
+- Crawl produced no tweets: crawl CLI plus [`src/server/x-api-capture.ts`](../src/server/x-api-capture.ts) and [`src/server/x-api.ts`](../src/server/x-api.ts)
+- Analysis missing from UI: `data/analysis/tweet-usages/` and [`src/server/data.ts`](../src/server/data.ts)
+- Similarity/grouping looks wrong: [`src/server/media-assets.ts`](../src/server/media-assets.ts)
+- Search results missing: [`src/server/chroma-facets.ts`](../src/server/chroma-facets.ts)
+- Compose run needs deeper debugging: inspect `data/analysis/compose-runs/<compose-run-id>/` first, then trace through [`src/server/compose-run-log.ts`](../src/server/compose-run-log.ts), [`src/server/compose-model-cli.ts`](../src/server/compose-model-cli.ts), and [`src/server/reply-media-search.ts`](../src/server/reply-media-search.ts).
+- Topic radar looks wrong or stale: [`src/server/tweet-topics.ts`](../src/server/tweet-topics.ts), [`src/server/gemini-topic-analysis.ts`](../src/server/gemini-topic-analysis.ts), `data/analysis/topic-tweets/`, and `data/analysis/topics/index.json`
+- Usage detail shows weak topic matches: inspect [`src/server/usage-details.ts`](../src/server/usage-details.ts) for the query builder and [`src/server/chroma-facets.ts`](../src/server/chroma-facets.ts) for topic indexing/search.
+- Topic composer fails or picks weak media: inspect [`src/server/topic-composer.ts`](../src/server/topic-composer.ts), [`src/server/topic-composer-prompt.ts`](../src/server/topic-composer-prompt.ts), and [`src/server/reply-media-search.ts`](../src/server/reply-media-search.ts).
+- Media composer drafts weak posts: inspect [`src/server/media-post-composer.ts`](../src/server/media-post-composer.ts), [`src/server/media-post-composer-prompt.ts`](../src/server/media-post-composer-prompt.ts), and [`src/server/usage-details.ts`](../src/server/usage-details.ts).
 
 ## Test Strategy
 
@@ -263,6 +263,6 @@ Relevant files:
 
 Tests live in:
 
-- [`tests/unit`](/Users/nicklocascio/Projects/twitter-trend/tests/unit)
-- [`tests/integration`](/Users/nicklocascio/Projects/twitter-trend/tests/integration)
-- [`tests/e2e`](/Users/nicklocascio/Projects/twitter-trend/tests/e2e)
+- [`tests/unit`](../tests/unit)
+- [`tests/integration`](../tests/integration)
+- [`tests/e2e`](../tests/e2e)

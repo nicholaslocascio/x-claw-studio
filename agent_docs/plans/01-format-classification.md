@@ -23,10 +23,10 @@ That gap matters because format is often the reusable part of a winning post.
 
 ## Current Hooks We Can Reuse
 
-- [src/server/gemini-topic-analysis.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/gemini-topic-analysis.ts)
-- [src/lib/types.ts](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
-- [src/lib/analysis-schema.ts](/Users/nicklocascio/Projects/twitter-trend/src/lib/analysis-schema.ts)
-- [src/server/data.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts)
+- [src/server/gemini-topic-analysis.ts](../../src/server/gemini-topic-analysis.ts)
+- [src/lib/types.ts](../../src/lib/types.ts)
+- [src/lib/analysis-schema.ts](../../src/lib/analysis-schema.ts)
+- [src/server/data.ts](../../src/server/data.ts)
 
 We already have:
 
@@ -50,10 +50,10 @@ Keep the taxonomy intentionally small at first. A short, stable list will be eas
 
 ## Implementation Steps
 
-1. Extend the shared topic-analysis type in [src/lib/types.ts](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts).
-2. Extend the Gemini response schema and prompt in [src/server/gemini-topic-analysis.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/gemini-topic-analysis.ts).
+1. Extend the shared topic-analysis type in [src/lib/types.ts](../../src/lib/types.ts).
+2. Extend the Gemini response schema and prompt in [src/server/gemini-topic-analysis.ts](../../src/server/gemini-topic-analysis.ts).
 3. Backfill existing topic-analysis files by rerunning topic analysis on a bounded sample first.
-4. Expose the new labels in the read model from [src/server/data.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts).
+4. Expose the new labels in the read model from [src/server/data.ts](../../src/server/data.ts).
 5. Add lightweight UI chips on tweet and topic surfaces so operators can see the detected shape.
 
 ## Guardrails

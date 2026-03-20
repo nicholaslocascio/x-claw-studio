@@ -138,12 +138,12 @@ That gives you both "find the exact tweet usage" and "find a reusable reaction i
 
 ## Files
 
-- [`README.md`](/Users/nicklocascio/Projects/twitter-trend/README.md)
-- [`schema.sql`](/Users/nicklocascio/Projects/twitter-trend/schema.sql)
-- [`src/lib/extract-tweets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/extract-tweets.ts)
-- [`src/cli/crawl-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-timeline.ts)
-- [`src/server/data.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts)
-- [`app/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/page.tsx)
+- [`README.md`](./README.md)
+- [`schema.sql`](./schema.sql)
+- [`src/lib/extract-tweets.ts`](./src/lib/extract-tweets.ts)
+- [`src/cli/crawl-timeline.ts`](./src/cli/crawl-timeline.ts)
+- [`src/server/data.ts`](./src/server/data.ts)
+- [`app/page.tsx`](./app/page.tsx)
 
 ## Install
 
@@ -169,7 +169,7 @@ The dashboard currently shows:
 
 ## Agent-friendly CLI
 
-The repo has CLI entrypoints in [`src/cli`](/Users/nicklocascio/Projects/twitter-trend/src/cli), plus an installed top-level binary in [`bin/x-media-analyst.mjs`](/Users/nicklocascio/Projects/twitter-trend/bin/x-media-analyst.mjs).
+The repo has CLI entrypoints in [`src/cli`](./src/cli), plus an installed top-level binary in [`bin/x-media-analyst.mjs`](./bin/x-media-analyst.mjs).
 
 Install it once for use from any directory:
 
@@ -380,7 +380,7 @@ Notes:
 
 ## Suggested next build steps
 
-1. Add SQLite writes for the schema in [`schema.sql`](/Users/nicklocascio/Projects/twitter-trend/schema.sql).
+1. Add SQLite writes for the schema in [`schema.sql`](./schema.sql).
 2. Add exact and perceptual dedupe before analysis.
 3. Add an analyzer worker that calls external vision/OCR/embedding APIs and writes usage-level fields.
 4. Add an aggregation worker that rolls usage rows into `media_asset_summary`.

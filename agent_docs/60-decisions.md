@@ -135,7 +135,7 @@ Only log things that future contributors are likely to need.
 
 ## 2026-03-11: Agents and Gemini CLI should run the local `stop-slop` pass before finalizing work
 
-- Context: the repo carries a local skill at [`/.agents/skills/stop-slop/SKILL.md`](/Users/nicklocascio/Projects/twitter-trend/.agents/skills/stop-slop/SKILL.md) to remove AI writing patterns from prose and tighten editing quality.
+- Context: the repo carries a local skill at [`/.agents/skills/stop-slop/SKILL.md`](../.agents/skills/stop-slop/SKILL.md) to remove AI writing patterns from prose and tighten editing quality.
 - Decision: make that skill an explicit part of the repo quality bar and change playbook for prompts, docs, UI copy, and final explanations, and tell `gemini` to load it directly in headless prompt flows.
 - Why: the project needs a consistent guardrail against filler, predictable structure, and generic copy in both product surfaces and agent-written documentation.
 - Impact: future agents should treat the `stop-slop` review as part of done, alongside tests and docs, and Gemini CLI integrations should reference the skill file in their prompts when prose quality matters.
@@ -184,7 +184,7 @@ Only log things that future contributors are likely to need.
 ## 2026-03-10: Agent docs added as a first-class repo navigation layer
 
 - Context: the repo had product documentation in `README.md`, but no dedicated guide for coding agents to navigate the current architecture quickly.
-- Decision: add a root [`AGENTS.md`](/Users/nicklocascio/Projects/twitter-trend/AGENTS.md) plus numbered docs under [`agent_docs/`](/Users/nicklocascio/Projects/twitter-trend/agent_docs).
+- Decision: add a root [`AGENTS.md`](../AGENTS.md) plus numbered docs under [`agent_docs/`](./).
 - Why: the codebase mixes Next.js pages, CLI entrypoints, file-backed server modules, and runtime artifacts under `data/`; agents need a stable path to the right file without rediscovering structure each time.
 - Impact: future changes should update these docs as part of the same task whenever architecture, workflows, or contracts move.
 - Follow-up: if the repo grows more subsystems, split this file into an `agent_docs/adr/` folder or add more numbered deep-dive docs.

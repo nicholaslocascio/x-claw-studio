@@ -16,27 +16,27 @@ This repo is not database-backed in the current runtime path. The app reads from
 
 ## Read In This Order
 
-1. [`agent_docs/00-start-here.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/00-start-here.md)
-2. [`agent_docs/10-repo-map.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/10-repo-map.md)
-3. [`agent_docs/20-runtime-flows.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/20-runtime-flows.md)
-4. [`agent_docs/30-data-layout.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/30-data-layout.md)
-5. [`agent_docs/40-operations.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/40-operations.md)
-6. [`agent_docs/50-change-playbooks.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/50-change-playbooks.md)
-7. [`agent_docs/60-decisions.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/60-decisions.md)
+1. [`agent_docs/00-start-here.md`](./agent_docs/00-start-here.md)
+2. [`agent_docs/10-repo-map.md`](./agent_docs/10-repo-map.md)
+3. [`agent_docs/20-runtime-flows.md`](./agent_docs/20-runtime-flows.md)
+4. [`agent_docs/30-data-layout.md`](./agent_docs/30-data-layout.md)
+5. [`agent_docs/40-operations.md`](./agent_docs/40-operations.md)
+6. [`agent_docs/50-change-playbooks.md`](./agent_docs/50-change-playbooks.md)
+7. [`agent_docs/60-decisions.md`](./agent_docs/60-decisions.md)
 
 ## Fast Repo Navigation
 
-- UI entrypoints: [`app/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/page.tsx), [`app/matches/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/matches/page.tsx), [`app/usage/[usageId]/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/usage/[usageId]/page.tsx)
-- UI components: [`src/components`](/Users/nicklocascio/Projects/twitter-trend/src/components)
-- File-backed read model: [`src/server/data.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts)
-- Capture entrypoints: [`src/cli/crawl-x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-x-api.ts), [`src/cli/crawl-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-timeline.ts), [`src/cli/capture-x-api-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/capture-x-api-timeline.ts)
-- Capture internals: [`src/server/openclaw-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/openclaw-capture.ts), [`src/server/openclaw-browser.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/openclaw-browser.ts), [`src/lib/extract-tweets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/extract-tweets.ts)
-- Analysis pipeline: [`src/server/analysis-pipeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-pipeline.ts), [`src/server/gemini-analysis.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/gemini-analysis.ts), [`src/server/analysis-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-store.ts)
-- Asset rebuild and grouping: [`src/server/media-assets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-assets.ts), [`src/server/media-fingerprint.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-fingerprint.ts), [`src/server/media-embedding.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-embedding.ts)
-- Search/indexing: [`src/server/chroma-facets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/chroma-facets.ts)
-- Scheduler/run control: [`src/server/run-control.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/run-control.ts), [`src/cli/scheduler.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/scheduler.ts), [`src/cli/run-stack.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/run-stack.ts)
-- Shared contracts: [`src/lib/types.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts), [`src/lib/analysis-schema.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/analysis-schema.ts)
-- Tests: [`tests/unit`](/Users/nicklocascio/Projects/twitter-trend/tests/unit), [`tests/integration`](/Users/nicklocascio/Projects/twitter-trend/tests/integration), [`tests/e2e`](/Users/nicklocascio/Projects/twitter-trend/tests/e2e)
+- UI entrypoints: [`app/page.tsx`](./app/page.tsx), [`app/matches/page.tsx`](./app/matches/page.tsx), [`app/usage/[usageId]/page.tsx`](./app/usage/[usageId]/page.tsx)
+- UI components: [`src/components`](./src/components)
+- File-backed read model: [`src/server/data.ts`](./src/server/data.ts)
+- Capture entrypoints: [`src/cli/crawl-x-api.ts`](./src/cli/crawl-x-api.ts), [`src/cli/crawl-timeline.ts`](./src/cli/crawl-timeline.ts), [`src/cli/capture-x-api-timeline.ts`](./src/cli/capture-x-api-timeline.ts)
+- Capture internals: [`src/server/openclaw-capture.ts`](./src/server/openclaw-capture.ts), [`src/server/openclaw-browser.ts`](./src/server/openclaw-browser.ts), [`src/lib/extract-tweets.ts`](./src/lib/extract-tweets.ts)
+- Analysis pipeline: [`src/server/analysis-pipeline.ts`](./src/server/analysis-pipeline.ts), [`src/server/gemini-analysis.ts`](./src/server/gemini-analysis.ts), [`src/server/analysis-store.ts`](./src/server/analysis-store.ts)
+- Asset rebuild and grouping: [`src/server/media-assets.ts`](./src/server/media-assets.ts), [`src/server/media-fingerprint.ts`](./src/server/media-fingerprint.ts), [`src/server/media-embedding.ts`](./src/server/media-embedding.ts)
+- Search/indexing: [`src/server/chroma-facets.ts`](./src/server/chroma-facets.ts)
+- Scheduler/run control: [`src/server/run-control.ts`](./src/server/run-control.ts), [`src/cli/scheduler.ts`](./src/cli/scheduler.ts), [`src/cli/run-stack.ts`](./src/cli/run-stack.ts)
+- Shared contracts: [`src/lib/types.ts`](./src/lib/types.ts), [`src/lib/analysis-schema.ts`](./src/lib/analysis-schema.ts)
+- Tests: [`tests/unit`](./tests/unit), [`tests/integration`](./tests/integration), [`tests/e2e`](./tests/e2e)
 
 ## Ground Truth Rules
 
@@ -49,8 +49,8 @@ This repo is not database-backed in the current runtime path. The app reads from
 
 ## Quality Bar
 
-- A local skill exists at [`/.agents/skills/stop-slop/SKILL.md`](/Users/nicklocascio/Projects/twitter-trend/.agents/skills/stop-slop/SKILL.md). Use its rules as a required pre-submit pass whenever you draft, edit, or review prose in this repo.
-- A local gstack install exists at [`/skills/gstack`](/Users/nicklocascio/Projects/twitter-trend/skills/gstack). Use the `/browse` skill from gstack for all web browsing in this repo.
+- A local skill exists at [`/.agents/skills/stop-slop/SKILL.md`](.agents/skills/stop-slop/SKILL.md). Use its rules as a required pre-submit pass whenever you draft, edit, or review prose in this repo.
+- A local gstack install exists at [`/skills/gstack`](./skills/gstack). Use the `/browse` skill from gstack for all web browsing in this repo.
 - Never use `mcp__claude-in-chrome__*` tools in this repo.
 - Available gstack skills:
   - `/plan-ceo-review`
@@ -88,12 +88,12 @@ This repo is not database-backed in the current runtime path. The app reads from
   - high-level orientation in lower-numbered files
   - deeper subsystem details in later files
   - cross-link from summary docs to deeper docs instead of duplicating large explanations
-- Update [`agent_docs/10-repo-map.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/10-repo-map.md) when directories, primary entrypoints, or ownership boundaries change.
-- Update [`agent_docs/20-runtime-flows.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/20-runtime-flows.md) when data flow, orchestration, triggers, or external integrations change.
-- Update [`agent_docs/30-data-layout.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/30-data-layout.md) when file formats, storage locations, or shared contracts change.
-- Update [`agent_docs/40-operations.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/40-operations.md) when commands, env requirements, or runbooks change.
-- Update [`agent_docs/50-change-playbooks.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/50-change-playbooks.md) when the recommended path for making changes shifts.
-- Append notable decisions, tradeoffs, and lessons to [`agent_docs/60-decisions.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/60-decisions.md) when:
+- Update [`agent_docs/10-repo-map.md`](./agent_docs/10-repo-map.md) when directories, primary entrypoints, or ownership boundaries change.
+- Update [`agent_docs/20-runtime-flows.md`](./agent_docs/20-runtime-flows.md) when data flow, orchestration, triggers, or external integrations change.
+- Update [`agent_docs/30-data-layout.md`](./agent_docs/30-data-layout.md) when file formats, storage locations, or shared contracts change.
+- Update [`agent_docs/40-operations.md`](./agent_docs/40-operations.md) when commands, env requirements, or runbooks change.
+- Update [`agent_docs/50-change-playbooks.md`](./agent_docs/50-change-playbooks.md) when the recommended path for making changes shifts.
+- Append notable decisions, tradeoffs, and lessons to [`agent_docs/60-decisions.md`](./agent_docs/60-decisions.md) when:
   - choosing one architecture over another
   - introducing a new subsystem or external dependency
   - deliberately keeping a temporary constraint or workaround
@@ -103,12 +103,12 @@ This repo is not database-backed in the current runtime path. The app reads from
 
 ## Common Tasks
 
-- “Where does the homepage get its data?” Open [`src/server/data.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts).
-- “How do runs get triggered and logged?” Open [`src/server/run-control.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/run-control.ts).
+- “Where does the homepage get its data?” Open [`src/server/data.ts`](./src/server/data.ts).
+- “How do runs get triggered and logged?” Open [`src/server/run-control.ts`](./src/server/run-control.ts).
 - “Where are crawl manifests written?” Inspect `data/raw/*/manifest.json` and the crawl CLI files.
-- “Where are per-usage analyses stored?” Open [`src/server/analysis-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-store.ts).
-- “Where are asset summaries and duplicate groups built?” Open [`src/server/media-assets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-assets.ts).
-- “Where does facet search come from?” Open [`src/server/chroma-facets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/chroma-facets.ts).
+- “Where are per-usage analyses stored?” Open [`src/server/analysis-store.ts`](./src/server/analysis-store.ts).
+- “Where are asset summaries and duplicate groups built?” Open [`src/server/media-assets.ts`](./src/server/media-assets.ts).
+- “Where does facet search come from?” Open [`src/server/chroma-facets.ts`](./src/server/chroma-facets.ts).
 
 ## Commands Agents Will Actually Use
 

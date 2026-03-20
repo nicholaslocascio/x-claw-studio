@@ -15,21 +15,21 @@ The current app is driven by local artifacts under `data/`, not by a live SQL da
 
 ## One-Minute Orientation
 
-- The homepage calls [`getDashboardData()`](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts).
+- The homepage calls [`getDashboardData()`](../src/server/data.ts).
 - `getDashboardData()` reads manifests, scheduler config, run history, saved analyses, and media asset indexes from disk.
-- CLI commands in [`src/cli`](/Users/nicklocascio/Projects/twitter-trend/src/cli) create or rebuild those files.
+- CLI commands in [`src/cli`](../src/cli) create or rebuild those files.
 - The UI renders those derived records synchronously on the server.
 
 ## If You Need To Change...
 
-- Crawl behavior: start in [`src/cli/crawl-x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-x-api.ts), [`src/server/x-api-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts), or [`src/cli/crawl-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-timeline.ts)
-- X API client details: start in [`src/server/x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts)
-- Capture persistence during API crawls: start in [`src/server/x-api-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts)
-- Usage analysis: start in [`src/server/analysis-pipeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-pipeline.ts)
-- Saved analysis shape: start in [`src/lib/analysis-schema.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/analysis-schema.ts)
-- Asset grouping / dedupe / summaries: start in [`src/server/media-assets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-assets.ts)
-- Scheduler or task execution: start in [`src/server/run-control.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/run-control.ts)
-- Dashboard behavior: start in [`app/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/page.tsx) and [`src/components`](/Users/nicklocascio/Projects/twitter-trend/src/components)
+- Crawl behavior: start in [`src/cli/crawl-x-api.ts`](../src/cli/crawl-x-api.ts), [`src/server/x-api-capture.ts`](../src/server/x-api-capture.ts), or [`src/cli/crawl-timeline.ts`](../src/cli/crawl-timeline.ts)
+- X API client details: start in [`src/server/x-api.ts`](../src/server/x-api.ts)
+- Capture persistence during API crawls: start in [`src/server/x-api-capture.ts`](../src/server/x-api-capture.ts)
+- Usage analysis: start in [`src/server/analysis-pipeline.ts`](../src/server/analysis-pipeline.ts)
+- Saved analysis shape: start in [`src/lib/analysis-schema.ts`](../src/lib/analysis-schema.ts)
+- Asset grouping / dedupe / summaries: start in [`src/server/media-assets.ts`](../src/server/media-assets.ts)
+- Scheduler or task execution: start in [`src/server/run-control.ts`](../src/server/run-control.ts)
+- Dashboard behavior: start in [`app/page.tsx`](../app/page.tsx) and [`src/components`](../src/components)
 
 ## Architectural Shape
 
@@ -47,5 +47,5 @@ flowchart TD
 
 ## Read Next
 
-- [`10-repo-map.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/10-repo-map.md) for directory-by-directory navigation.
-- [`20-runtime-flows.md`](/Users/nicklocascio/Projects/twitter-trend/agent_docs/20-runtime-flows.md) for end-to-end workflows.
+- [`10-repo-map.md`](./10-repo-map.md) for directory-by-directory navigation.
+- [`20-runtime-flows.md`](./20-runtime-flows.md) for end-to-end workflows.

@@ -16,12 +16,12 @@ flowchart LR
 
 Key files:
 
-- [`src/cli/crawl-x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-x-api.ts)
-- [`src/cli/sync-capture-outputs.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/sync-capture-outputs.ts)
-- [`src/server/x-api-capture.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts)
-- [`src/server/x-api.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts)
-- [`src/cli/crawl-timeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/crawl-timeline.ts)
-- [`src/lib/extract-tweets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/extract-tweets.ts)
+- [`src/cli/crawl-x-api.ts`](../src/cli/crawl-x-api.ts)
+- [`src/cli/sync-capture-outputs.ts`](../src/cli/sync-capture-outputs.ts)
+- [`src/server/x-api-capture.ts`](../src/server/x-api-capture.ts)
+- [`src/server/x-api.ts`](../src/server/x-api.ts)
+- [`src/cli/crawl-timeline.ts`](../src/cli/crawl-timeline.ts)
+- [`src/lib/extract-tweets.ts`](../src/lib/extract-tweets.ts)
 
 Outputs:
 
@@ -70,7 +70,7 @@ flowchart TD
 
 Key file:
 
-- [`src/server/data.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/data.ts)
+- [`src/server/data.ts`](../src/server/data.ts)
 
 Important detail:
 
@@ -96,11 +96,11 @@ flowchart LR
 
 Key files:
 
-- [`src/cli/analyze-topics.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/analyze-topics.ts)
-- [`src/server/analyze-topics.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analyze-topics.ts)
-- [`src/server/gemini-topic-analysis.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/gemini-topic-analysis.ts)
-- [`src/server/topic-analysis-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/topic-analysis-store.ts)
-- [`src/server/tweet-topics.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/tweet-topics.ts)
+- [`src/cli/analyze-topics.ts`](../src/cli/analyze-topics.ts)
+- [`src/server/analyze-topics.ts`](../src/server/analyze-topics.ts)
+- [`src/server/gemini-topic-analysis.ts`](../src/server/gemini-topic-analysis.ts)
+- [`src/server/topic-analysis-store.ts`](../src/server/topic-analysis-store.ts)
+- [`src/server/tweet-topics.ts`](../src/server/tweet-topics.ts)
 
 Important detail:
 
@@ -120,10 +120,10 @@ flowchart LR
 
 Key files:
 
-- [`src/server/analysis-pipeline.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-pipeline.ts)
-- [`src/server/gemini-analysis.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/gemini-analysis.ts)
-- [`src/server/analysis-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-store.ts)
-- [`src/server/chroma-facets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/chroma-facets.ts)
+- [`src/server/analysis-pipeline.ts`](../src/server/analysis-pipeline.ts)
+- [`src/server/gemini-analysis.ts`](../src/server/gemini-analysis.ts)
+- [`src/server/analysis-store.ts`](../src/server/analysis-store.ts)
+- [`src/server/chroma-facets.ts`](../src/server/chroma-facets.ts)
 
 Outputs:
 
@@ -148,10 +148,10 @@ flowchart LR
 
 Key files:
 
-- [`src/cli/rebuild-media-assets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/rebuild-media-assets.ts)
-- [`src/server/media-assets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-assets.ts)
-- [`src/server/media-fingerprint.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-fingerprint.ts)
-- [`src/server/media-embedding.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-embedding.ts)
+- [`src/cli/rebuild-media-assets.ts`](../src/cli/rebuild-media-assets.ts)
+- [`src/server/media-assets.ts`](../src/server/media-assets.ts)
+- [`src/server/media-fingerprint.ts`](../src/server/media-fingerprint.ts)
+- [`src/server/media-embedding.ts`](../src/server/media-embedding.ts)
 
 Outputs:
 
@@ -176,35 +176,35 @@ flowchart TD
 
 Key files:
 
-- [`src/cli/scheduler.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/scheduler.ts)
-- [`src/server/run-control.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/run-control.ts)
+- [`src/cli/scheduler.ts`](../src/cli/scheduler.ts)
+- [`src/server/run-control.ts`](../src/server/run-control.ts)
 
 ## App Read Path
 
-- [`app/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/page.tsx) now reads a homepage-focused dashboard summary instead of the full aggregate.
+- [`app/page.tsx`](../app/page.tsx) now reads a homepage-focused dashboard summary instead of the full aggregate.
 - The shared shell now groups the product around `Home`, `Capture`, `Review`, `Compose`, `Research`, and `History`, so route copy should stay task-first instead of exposing pipeline terms like `usage queue` or `facet search` as top-level navigation.
-- [`app/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/page.tsx), [`app/control/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/control/page.tsx), and [`app/wishlist/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/wishlist/page.tsx) now use route-specific summary readers instead of always hydrating the full dashboard aggregate.
-- The homepage no longer mounts the full captured tweet browser on first paint. [`src/components/home-captured-tweet-preview.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/home-captured-tweet-preview.tsx) keeps that section closed by default and fetches the first 50 media tweets from [`app/api/tweets/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/tweets/route.ts) only after the operator opens it.
-- The homepage also keeps the usage queue, topic radar, facet search, wishlist, pipeline notes, and crawl-manifest grid behind [`src/components/home-section-accordion.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/home-section-accordion.tsx), so those sections do not render until opened.
-- [`app/queue/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/queue/page.tsx) and [`app/matches/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/matches/page.tsx) now page, search, sort, and duplicate-collapse usages from the lightweight usage corpus on the server before hydrating the shared queue UI, so those routes no longer both ship the entire media corpus to the browser and pay the full dashboard aggregate cost before slicing.
-- [`app/topics/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/topics/page.tsx) now reads the cached topic index directly and uses cached grounded-news entries during navigation instead of waiting for live refreshes.
-- [`app/tweets/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/tweets/page.tsx) and [`app/api/tweets/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/tweets/route.ts) now read captured tweets directly from manifests plus cached topic and asset metadata, then apply search, sort, and media filters before serving 200-tweet pages.
-- [`app/api/search/facets/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/search/facets/route.ts) serves homepage hybrid search from the de-duped media-asset summary index and keeps the default corpus on starred assets or assets with duplicate or similarity signals.
+- [`app/page.tsx`](../app/page.tsx), [`app/control/page.tsx`](../app/control/page.tsx), and [`app/wishlist/page.tsx`](../app/wishlist/page.tsx) now use route-specific summary readers instead of always hydrating the full dashboard aggregate.
+- The homepage no longer mounts the full captured tweet browser on first paint. [`src/components/home-captured-tweet-preview.tsx`](../src/components/home-captured-tweet-preview.tsx) keeps that section closed by default and fetches the first 50 media tweets from [`app/api/tweets/route.ts`](../app/api/tweets/route.ts) only after the operator opens it.
+- The homepage also keeps the usage queue, topic radar, facet search, wishlist, pipeline notes, and crawl-manifest grid behind [`src/components/home-section-accordion.tsx`](../src/components/home-section-accordion.tsx), so those sections do not render until opened.
+- [`app/queue/page.tsx`](../app/queue/page.tsx) and [`app/matches/page.tsx`](../app/matches/page.tsx) now page, search, sort, and duplicate-collapse usages from the lightweight usage corpus on the server before hydrating the shared queue UI, so those routes no longer both ship the entire media corpus to the browser and pay the full dashboard aggregate cost before slicing.
+- [`app/topics/page.tsx`](../app/topics/page.tsx) now reads the cached topic index directly and uses cached grounded-news entries during navigation instead of waiting for live refreshes.
+- [`app/tweets/page.tsx`](../app/tweets/page.tsx) and [`app/api/tweets/route.ts`](../app/api/tweets/route.ts) now read captured tweets directly from manifests plus cached topic and asset metadata, then apply search, sort, and media filters before serving 200-tweet pages.
+- [`app/api/search/facets/route.ts`](../app/api/search/facets/route.ts) serves homepage hybrid search from the de-duped media-asset summary index and keeps the default corpus on starred assets or assets with duplicate or similarity signals.
 - The facet-search path now reuses an in-process Chroma collection handle and caches repeated query embeddings, so repeated searches stop paying the full Gemini embedding round-trip every time.
 - The lexical facet-search path also memoizes its asset-summary corpus against the read-model cache key and builds that corpus from lightweight usage records instead of `getDashboardData()`, so repeated queries stop rebuilding the full search document set.
 - When the default stronger-candidates filter is enabled, facet search now over-fetches a deeper candidate pool before applying that quality gate, so asking for 20 results is less likely to stall at a shallow partial page just because the first pass included too many one-off assets.
 - Facet search now treats intent routing and intent boosts as an explicit `hardMatchMode` instead of doing that silently for all broad queries. The API and CLI default to `hardMatchMode=off`, so ranking is driven by embeddings, lexical evidence, and the search-document corpus unless an operator opts back into `intent`.
 - The compare-separately path now gives small priors to high-signal visual presence facets and light penalties to ancillary audio/meta facets. That keeps queries like `female` from bubbling up rows that only mention female vocals while still leaving audio facets searchable when they are genuinely relevant.
 - The hybrid ranker now dampens pure-vector rows more than mixed vector-plus-lexical rows. That keeps the embedder active for exact or strongly semantic queries without letting broad, low-lexical vector neighbors swamp short intent-like searches.
-- [`app/replies/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/replies/page.tsx) is the compose workspace for both reply mode from a pasted X status URL and new-post mode from free-form notes.
-- [`app/clone/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/clone/page.tsx) is a dedicated clone workspace that accepts a captured tweet id, a pasted X status URL, or pasted tweet text, then rewrites it with configurable style/topic/media preservation.
-- [`app/api/tweets/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/tweets/route.ts) exposes that same tweet-browser contract over HTTP with `page`, `limit`, `query`, `filter`, and `sort` params, capped at 200 results per page.
-- [`src/cli/search-tweets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/search-tweets.ts) exposes the same listing flow in the terminal through `x-media-analyst search tweets`.
-- [`src/cli/search-facets.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/search-facets.ts) uses that same de-duped asset-summary search path, so repeated usages of the same asset should collapse into one search result before ranking.
-- [`app/topics/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/topics/page.tsx) shows the full topic cluster set with URL-backed query, sort, freshness, topic-type, and pagination controls, plus the cached topic-index timestamp so stale topic data is obvious.
-- [`app/api/search/topics/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/search/topics/route.ts) serves topic-search queries for the web app.
-- [`app/matches/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/matches/page.tsx) reuses the usage queue with matching filters.
-- [`app/usage/[usageId]/page.tsx`](/Users/nicklocascio/Projects/twitter-trend/app/usage/[usageId]/page.tsx) now builds one usage detail record from manifests, saved analyses, and the asset index instead of hydrating the whole dashboard aggregate first, then adds topic matches from the topic index / Chroma search path.
+- [`app/replies/page.tsx`](../app/replies/page.tsx) is the compose workspace for both reply mode from a pasted X status URL and new-post mode from free-form notes.
+- [`app/clone/page.tsx`](../app/clone/page.tsx) is a dedicated clone workspace that accepts a captured tweet id, a pasted X status URL, or pasted tweet text, then rewrites it with configurable style/topic/media preservation.
+- [`app/api/tweets/route.ts`](../app/api/tweets/route.ts) exposes that same tweet-browser contract over HTTP with `page`, `limit`, `query`, `filter`, and `sort` params, capped at 200 results per page.
+- [`src/cli/search-tweets.ts`](../src/cli/search-tweets.ts) exposes the same listing flow in the terminal through `x-media-analyst search tweets`.
+- [`src/cli/search-facets.ts`](../src/cli/search-facets.ts) uses that same de-duped asset-summary search path, so repeated usages of the same asset should collapse into one search result before ranking.
+- [`app/topics/page.tsx`](../app/topics/page.tsx) shows the full topic cluster set with URL-backed query, sort, freshness, topic-type, and pagination controls, plus the cached topic-index timestamp so stale topic data is obvious.
+- [`app/api/search/topics/route.ts`](../app/api/search/topics/route.ts) serves topic-search queries for the web app.
+- [`app/matches/page.tsx`](../app/matches/page.tsx) reuses the usage queue with matching filters.
+- [`app/usage/[usageId]/page.tsx`](../app/usage/[usageId]/page.tsx) now builds one usage detail record from manifests, saved analyses, and the asset index instead of hydrating the whole dashboard aggregate first, then adds topic matches from the topic index / Chroma search path.
 
 ## Flow 6B: Compose A New Tweet From A Topic
 
@@ -220,11 +220,11 @@ flowchart LR
 
 Key files:
 
-- [`app/api/topics/compose/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/topics/compose/route.ts)
-- [`src/server/topic-composer.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/topic-composer.ts)
-- [`src/server/topic-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/topic-composer-model.ts)
-- [`src/server/topic-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/topic-composer-prompt.ts)
-- [`src/components/topic-tweet-composer.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/topic-tweet-composer.tsx)
+- [`app/api/topics/compose/route.ts`](../app/api/topics/compose/route.ts)
+- [`src/server/topic-composer.ts`](../src/server/topic-composer.ts)
+- [`src/server/topic-composer-model.ts`](../src/server/topic-composer-model.ts)
+- [`src/server/topic-composer-prompt.ts`](../src/server/topic-composer-prompt.ts)
+- [`src/components/topic-tweet-composer.tsx`](../src/components/topic-tweet-composer.tsx)
 
 Important detail:
 
@@ -250,11 +250,11 @@ flowchart LR
 
 Key files:
 
-- [`app/api/media/compose/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/media/compose/route.ts)
-- [`src/server/media-post-composer.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-post-composer.ts)
-- [`src/server/media-post-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-post-composer-model.ts)
-- [`src/server/media-post-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/media-post-composer-prompt.ts)
-- [`src/components/media-tweet-composer.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/media-tweet-composer.tsx)
+- [`app/api/media/compose/route.ts`](../app/api/media/compose/route.ts)
+- [`src/server/media-post-composer.ts`](../src/server/media-post-composer.ts)
+- [`src/server/media-post-composer-model.ts`](../src/server/media-post-composer-model.ts)
+- [`src/server/media-post-composer-prompt.ts`](../src/server/media-post-composer-prompt.ts)
+- [`src/components/media-tweet-composer.tsx`](../src/components/media-tweet-composer.tsx)
 
 Important detail:
 
@@ -279,13 +279,13 @@ flowchart LR
 
 Key files:
 
-- [`app/api/clone/source/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/clone/source/route.ts)
-- [`app/api/clone/compose/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/clone/compose/route.ts)
-- [`src/server/clone-tweet-subject.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/clone-tweet-subject.ts)
-- [`src/server/clone-tweet-composer.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/clone-tweet-composer.ts)
-- [`src/server/clone-tweet-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/clone-tweet-composer-model.ts)
-- [`src/server/clone-tweet-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/clone-tweet-composer-prompt.ts)
-- [`src/components/clone-tweet-workbench.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/clone-tweet-workbench.tsx)
+- [`app/api/clone/source/route.ts`](../app/api/clone/source/route.ts)
+- [`app/api/clone/compose/route.ts`](../app/api/clone/compose/route.ts)
+- [`src/server/clone-tweet-subject.ts`](../src/server/clone-tweet-subject.ts)
+- [`src/server/clone-tweet-composer.ts`](../src/server/clone-tweet-composer.ts)
+- [`src/server/clone-tweet-composer-model.ts`](../src/server/clone-tweet-composer-model.ts)
+- [`src/server/clone-tweet-composer-prompt.ts`](../src/server/clone-tweet-composer-prompt.ts)
+- [`src/components/clone-tweet-workbench.tsx`](../src/components/clone-tweet-workbench.tsx)
 
 Important detail:
 
@@ -311,14 +311,14 @@ flowchart LR
 
 Key files:
 
-- [`app/api/reply/source/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/reply/source/route.ts)
-- [`app/api/reply/compose/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/reply/compose/route.ts)
-- [`src/server/reply-composer.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer.ts)
-- [`src/server/reply-composer-subject.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer-subject.ts)
-- [`src/server/reply-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer-model.ts)
-- [`src/server/reply-media-search.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-media-search.ts)
-- [`src/server/reply-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-composer-prompt.ts)
-- [`src/server/meme-template-search.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/meme-template-search.ts)
+- [`app/api/reply/source/route.ts`](../app/api/reply/source/route.ts)
+- [`app/api/reply/compose/route.ts`](../app/api/reply/compose/route.ts)
+- [`src/server/reply-composer.ts`](../src/server/reply-composer.ts)
+- [`src/server/reply-composer-subject.ts`](../src/server/reply-composer-subject.ts)
+- [`src/server/reply-composer-model.ts`](../src/server/reply-composer-model.ts)
+- [`src/server/reply-media-search.ts`](../src/server/reply-media-search.ts)
+- [`src/server/reply-composer-prompt.ts`](../src/server/reply-composer-prompt.ts)
+- [`src/server/meme-template-search.ts`](../src/server/meme-template-search.ts)
 
 Important detail:
 
@@ -346,13 +346,13 @@ flowchart LR
 
 Key files:
 
-- [`app/api/manual-post/compose/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/manual-post/compose/route.ts)
-- [`app/api/manual-post/trends/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/manual-post/trends/route.ts)
-- [`src/server/manual-post-composer.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/manual-post-composer.ts)
-- [`src/server/manual-post-composer-model.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/manual-post-composer-model.ts)
-- [`src/server/manual-post-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/manual-post-composer-prompt.ts)
-- [`src/server/trend-post-brief.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/trend-post-brief.ts)
-- [`src/components/manual-post-composer.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/manual-post-composer.tsx)
+- [`app/api/manual-post/compose/route.ts`](../app/api/manual-post/compose/route.ts)
+- [`app/api/manual-post/trends/route.ts`](../app/api/manual-post/trends/route.ts)
+- [`src/server/manual-post-composer.ts`](../src/server/manual-post-composer.ts)
+- [`src/server/manual-post-composer-model.ts`](../src/server/manual-post-composer-model.ts)
+- [`src/server/manual-post-composer-prompt.ts`](../src/server/manual-post-composer-prompt.ts)
+- [`src/server/trend-post-brief.ts`](../src/server/trend-post-brief.ts)
+- [`src/components/manual-post-composer.tsx`](../src/components/manual-post-composer.tsx)
 
 Important detail:
 
@@ -375,10 +375,10 @@ flowchart LR
 
 Key files:
 
-- [`app/api/typefully/draft/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/typefully/draft/route.ts)
-- [`src/server/typefully.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/typefully.ts)
-- [`src/server/generated-drafts.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/generated-drafts.ts)
-- [`src/components/post-to-x-button.tsx`](/Users/nicklocascio/Projects/twitter-trend/src/components/post-to-x-button.tsx)
+- [`app/api/typefully/draft/route.ts`](../app/api/typefully/draft/route.ts)
+- [`src/server/typefully.ts`](../src/server/typefully.ts)
+- [`src/server/generated-drafts.ts`](../src/server/generated-drafts.ts)
+- [`src/components/post-to-x-button.tsx`](../src/components/post-to-x-button.tsx)
 
 Important detail:
 
@@ -408,11 +408,11 @@ flowchart LR
 
 Key files:
 
-- [`app/api/reply/compose/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/reply/compose/route.ts)
-- [`app/api/topics/compose/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/topics/compose/route.ts)
-- [`app/api/media/compose/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/media/compose/route.ts)
-- [`app/api/generated-drafts/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/generated-drafts/route.ts)
-- [`src/server/generated-drafts.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/generated-drafts.ts)
+- [`app/api/reply/compose/route.ts`](../app/api/reply/compose/route.ts)
+- [`app/api/topics/compose/route.ts`](../app/api/topics/compose/route.ts)
+- [`app/api/media/compose/route.ts`](../app/api/media/compose/route.ts)
+- [`app/api/generated-drafts/route.ts`](../app/api/generated-drafts/route.ts)
+- [`src/server/generated-drafts.ts`](../src/server/generated-drafts.ts)
 
 Important detail:
 
@@ -441,12 +441,12 @@ flowchart LR
 
 Key files:
 
-- [`src/server/meme-template-import.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/meme-template-import.ts)
-- [`src/server/meme-template-gemini.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/meme-template-gemini.ts)
-- [`src/server/meming-world.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/meming-world.ts)
-- [`src/server/meme-template-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/meme-template-store.ts)
-- [`app/api/reply-media-wishlist/import/route.ts`](/Users/nicklocascio/Projects/twitter-trend/app/api/reply-media-wishlist/import/route.ts)
-- [`src/cli/import-meme-template.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/import-meme-template.ts)
+- [`src/server/meme-template-import.ts`](../src/server/meme-template-import.ts)
+- [`src/server/meme-template-gemini.ts`](../src/server/meme-template-gemini.ts)
+- [`src/server/meming-world.ts`](../src/server/meming-world.ts)
+- [`src/server/meme-template-store.ts`](../src/server/meme-template-store.ts)
+- [`app/api/reply-media-wishlist/import/route.ts`](../app/api/reply-media-wishlist/import/route.ts)
+- [`src/cli/import-meme-template.ts`](../src/cli/import-meme-template.ts)
 
 Important detail:
 

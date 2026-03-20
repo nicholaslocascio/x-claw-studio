@@ -57,7 +57,7 @@ Per-crawl artifacts. Each run has a unique run id and a `manifest.json` that inc
 - whether images, posters, or videos were downloaded
 - native media file paths when type inference succeeds, while raw compatibility `.bin` copies may exist alongside them in `media/`
 
-Primary type: [`CrawlManifest`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
+Primary type: [`CrawlManifest`](../src/lib/types.ts)
 
 ### `data/analysis/tweet-usages/`
 
@@ -67,11 +67,11 @@ Video analyses may include video-only facets such as `video_music`, `video_sound
 
 Dashboard and indexing reads skip malformed JSON files in this directory and log a warning instead of failing the whole read path.
 
-Primary type: [`UsageAnalysis`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
+Primary type: [`UsageAnalysis`](../src/lib/types.ts)
 
 Written by:
 
-- [`src/server/analysis-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/analysis-store.ts)
+- [`src/server/analysis-store.ts`](../src/server/analysis-store.ts)
 
 ### `data/analysis/search-eval-fixtures.json`
 
@@ -87,7 +87,7 @@ Each fixture can define:
 
 Used by:
 
-- [`src/cli/eval-search-quality.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/eval-search-quality.ts)
+- [`src/cli/eval-search-quality.ts`](../src/cli/eval-search-quality.ts)
 
 ### `data/analysis/trend-digest-examples.json`
 
@@ -102,9 +102,9 @@ Each example includes:
 
 Used by:
 
-- [`src/server/trend-digest-examples.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/trend-digest-examples.ts)
-- [`src/server/manual-post-composer-prompt.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/manual-post-composer-prompt.ts)
-- [`src/cli/eval-trend-quality.ts`](/Users/nicklocascio/Projects/twitter-trend/src/cli/eval-trend-quality.ts)
+- [`src/server/trend-digest-examples.ts`](../src/server/trend-digest-examples.ts)
+- [`src/server/manual-post-composer-prompt.ts`](../src/server/manual-post-composer-prompt.ts)
+- [`src/cli/eval-trend-quality.ts`](../src/cli/eval-trend-quality.ts)
 
 ### `data/analysis/generated-drafts/`
 
@@ -123,7 +123,7 @@ File-backed history for generated replies and tweets.
 
 Written by:
 
-- [`src/server/generated-drafts.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/generated-drafts.ts)
+- [`src/server/generated-drafts.ts`](../src/server/generated-drafts.ts)
 
 ### `data/analysis/compose-runs/`
 
@@ -141,7 +141,7 @@ Each run folder includes:
 
 Written by:
 
-- [`src/server/compose-run-log.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/compose-run-log.ts)
+- [`src/server/compose-run-log.ts`](../src/server/compose-run-log.ts)
 
 ### `data/analysis/topic-tweets/`
 
@@ -158,11 +158,11 @@ Each file holds:
 
 Primary type:
 
-- [`TweetTopicAnalysisRecord`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
+- [`TweetTopicAnalysisRecord`](../src/lib/types.ts)
 
 Written by:
 
-- [`src/server/topic-analysis-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/topic-analysis-store.ts)
+- [`src/server/topic-analysis-store.ts`](../src/server/topic-analysis-store.ts)
 
 ### `data/analysis/media-assets/`
 
@@ -174,8 +174,8 @@ Cross-usage asset-level records.
 
 Primary types:
 
-- [`MediaAssetRecord`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
-- [`MediaAssetSummary`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
+- [`MediaAssetRecord`](../src/lib/types.ts)
+- [`MediaAssetSummary`](../src/lib/types.ts)
 
 ### `data/analysis/topics/`
 
@@ -192,10 +192,10 @@ Derived topic data built from cached Gemini tweet-topic analyses plus saved twee
 
 Primary types:
 
-- [`TweetTopicRecord`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
-- [`TopicClusterRecord`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
-- [`TopicIndex`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
-- [`GroundedTopicNews`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
+- [`TweetTopicRecord`](../src/lib/types.ts)
+- [`TopicClusterRecord`](../src/lib/types.ts)
+- [`TopicIndex`](../src/lib/types.ts)
+- [`GroundedTopicNews`](../src/lib/types.ts)
 
 ### `data/analysis/reply-media-wishlist.json`
 
@@ -212,7 +212,7 @@ Each entry tracks:
 
 Written by:
 
-- [`src/server/reply-media-wishlist.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/reply-media-wishlist.ts)
+- [`src/server/reply-media-wishlist.ts`](../src/server/reply-media-wishlist.ts)
 
 ### `data/analysis/meme-templates/`
 
@@ -230,8 +230,8 @@ Current runtime use:
 
 Written by:
 
-- [`src/server/meme-template-store.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/meme-template-store.ts)
-- [`src/server/meme-template-import.ts`](/Users/nicklocascio/Projects/twitter-trend/src/server/meme-template-import.ts)
+- [`src/server/meme-template-store.ts`](../src/server/meme-template-store.ts)
+- [`src/server/meme-template-import.ts`](../src/server/meme-template-import.ts)
 
 ### `data/control/`
 
@@ -243,18 +243,18 @@ Operational state.
 
 Primary types:
 
-- [`SchedulerConfig`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
-- [`RunHistoryEntry`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
+- [`SchedulerConfig`](../src/lib/types.ts)
+- [`RunHistoryEntry`](../src/lib/types.ts)
 
 ## Contract Hierarchy
 
 When changing shape, check these in order:
 
-1. [`src/lib/types.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
-2. [`src/lib/analysis-schema.ts`](/Users/nicklocascio/Projects/twitter-trend/src/lib/analysis-schema.ts)
+1. [`src/lib/types.ts`](../src/lib/types.ts)
+2. [`src/lib/analysis-schema.ts`](../src/lib/analysis-schema.ts)
 3. The writer module in `src/server`
 4. `getDashboardData()` consumers in UI code
-5. Relevant tests under [`tests/`](/Users/nicklocascio/Projects/twitter-trend/tests)
+5. Relevant tests under [`tests/`](../tests)
 
 ## Important Current Reality
 

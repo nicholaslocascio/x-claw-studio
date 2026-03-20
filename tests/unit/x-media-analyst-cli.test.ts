@@ -4,7 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const repoRoot = "/Users/nicklocascio/Projects/twitter-trend";
+const repoRoot = path.resolve(__dirname, "..", "..");
 const binPath = path.join(repoRoot, "bin", "x-media-analyst.mjs");
 
 describe("x-media-analyst binary", () => {

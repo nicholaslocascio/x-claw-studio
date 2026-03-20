@@ -18,9 +18,9 @@ If we lose that relationship at capture time, we lose a large part of why the fo
 
 ## Current Hooks We Can Reuse
 
-- [src/server/x-api.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts)
-- [src/server/x-api-capture.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts)
-- [src/lib/types.ts](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts)
+- [src/server/x-api.ts](../../src/server/x-api.ts)
+- [src/server/x-api-capture.ts](../../src/server/x-api-capture.ts)
+- [src/lib/types.ts](../../src/lib/types.ts)
 
 The X API path already reads `referenced_tweets`, but the downstream extracted-tweet contract does not preserve enough of that relationship for analysis and composition.
 
@@ -40,9 +40,9 @@ Do not force full source hydration in the first pass. Store ids and URLs first.
 
 ## Implementation Steps
 
-1. Extend [src/lib/types.ts](/Users/nicklocascio/Projects/twitter-trend/src/lib/types.ts).
-2. Map `referenced_tweets` and outbound URLs in [src/server/x-api.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api.ts).
-3. Persist the new fields in manifests through [src/server/x-api-capture.ts](/Users/nicklocascio/Projects/twitter-trend/src/server/x-api-capture.ts).
+1. Extend [src/lib/types.ts](../../src/lib/types.ts).
+2. Map `referenced_tweets` and outbound URLs in [src/server/x-api.ts](../../src/server/x-api.ts).
+3. Persist the new fields in manifests through [src/server/x-api-capture.ts](../../src/server/x-api-capture.ts).
 4. Expose basic response-context hints in the read model.
 5. Use these hints in format classification and composition prompts.
 
