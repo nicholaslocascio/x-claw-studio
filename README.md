@@ -1,10 +1,14 @@
-# twitter-trend
+# x-claw-studio
 
 Turn X into a local trend engine, media library, and post-writing weapon.
 
-`twitter-trend` captures tweets and media from X, stores everything on your machine, analyzes how media gets used, and gives you a workspace to search patterns, spot breakout formats, and draft better posts from your own corpus.
+`x-claw-studio` captures tweets and media from X, stores everything on your machine, analyzes how media gets used, and gives you a workspace to search patterns, spot breakout formats, and draft better posts from your own corpus.
 
 This is for operators, researchers, meme hunters, and growth people who do not want another black-box dashboard that shows charts and hides the raw material.
+
+It ships both a dashboard and a real CLI, and it is OpenClaw-compatible out of the box.
+
+There is also a repo-level agent guide at [`SKILL.md`](./SKILL.md) for agents that need a portable install, setup, and CLI reference.
 
 ## The Pitch
 
@@ -20,6 +24,13 @@ This repo helps you keep the receipts:
 
 Then it gives you interfaces to turn that archive into output.
 
+## Why People Will Care
+
+- It is local-first, so you keep the raw tweets, media, and analysis
+- It has a serious CLI, not just a UI wrapper
+- It is compatible with existing OpenClaw-style capture flows and command aliases
+- It closes the loop from capture to search to drafting in one repo
+
 ## What It Does
 
 - Captures tweets and media from your X home timeline or a single tweet URL
@@ -31,7 +42,7 @@ Then it gives you interfaces to turn that archive into output.
 
 ## Why This Is Interesting
 
-Most X tools stop at monitoring. `twitter-trend` is built around a tighter loop:
+Most X tools stop at monitoring. `x-claw-studio` is built around a tighter loop:
 
 1. Capture what people are posting
 2. Understand why the media works
@@ -110,6 +121,45 @@ Best practice:
 - Optional Chroma for vector search
 - Optional Typefully integration for saving drafts
 
+## CLI First
+
+The UI is useful. The CLI is a feature.
+
+You can crawl, analyze, search, rebuild, inspect, and run the stack without living in the browser.
+
+```bash
+npm link
+x-media-analyst help
+```
+
+High-signal commands:
+
+```bash
+x-media-analyst crawl x-api
+x-media-analyst crawl openclaw
+x-media-analyst capture openclaw-current-tweet
+x-media-analyst analyze missing
+x-media-analyst search facets --query "reaction image" --limit 5
+x-media-analyst search tweets --query "OpenAI" --filter with_media --limit 50
+x-media-analyst search topics --query "AI coding tools"
+x-media-analyst media rebuild
+x-media-analyst run stack
+```
+
+If you prefer terminal-first workflows, this repo fully supports that mode.
+
+## OpenClaw Compatible
+
+`x-claw-studio` keeps the OpenClaw path intact.
+
+- `npm run crawl:openclaw` works as a compatibility alias
+- `x-media-analyst crawl openclaw` is supported
+- `x-media-analyst capture openclaw-current` is supported
+- `x-media-analyst capture openclaw-current-tweet` is supported
+- `x-media-analyst capture openclaw-current-tweet-and-compose-replies` is supported
+
+If you already think in OpenClaw terms, you do not need to relearn the repo to get value from it.
+
 ## Quick Start
 
 ### 1. Install dependencies
@@ -127,6 +177,13 @@ npm run dev
 Open [http://localhost:4105](http://localhost:4105).
 
 If you only want to look around the UI and existing local data, that is enough.
+
+### 3. Or use the CLI directly
+
+```bash
+npm link
+x-media-analyst app dev
+```
 
 ## Setup
 
@@ -236,11 +293,12 @@ The README, screenshots, and demo clips should sell that loop fast.
 
 ## CLI
 
-This repo ships an installable CLI:
+This repo ships an installable CLI for capture, analysis, search, evals, wishlist management, and stack control.
 
 ```bash
 npm link
 x-media-analyst help
+x-media-analyst repo root
 ```
 
 Useful examples:
@@ -249,6 +307,8 @@ Useful examples:
 x-media-analyst facet list
 x-media-analyst search facets --query "terminal dashboard" --limit 5
 x-media-analyst search tweets --query "OpenAI" --filter with_media --limit 50
+x-media-analyst search topics --query "OpenAI pricing backlash" --limit 5
+x-media-analyst crawl openclaw
 x-media-analyst app dev
 x-media-analyst run stack
 ```
