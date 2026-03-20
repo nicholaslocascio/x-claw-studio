@@ -35,6 +35,8 @@ If you post often, study fast-moving accounts, hunt for meme formats, or build a
 4. Search the archive for reusable patterns.
 5. Draft replies and original posts from your own corpus.
 
+![Home dashboard](docs/screenshots/dashboard-home.png)
+
 ## What It Does
 
 - Captures tweets and media from X timelines, priority accounts, or a single tweet URL
@@ -75,6 +77,10 @@ If you post often, study fast-moving accounts, hunt for meme formats, or build a
 | `/drafts` | Review saved generated drafts |
 | `/matches` | Inspect duplicate and similarity groupings |
 | `/control` | Manage scheduler settings, manual jobs, and run history |
+
+The review workflow is built to surface repeat patterns fast, not bury them in a generic feed view.
+
+![Media review](docs/screenshots/media-review.png)
 
 ## The Loop
 
@@ -135,6 +141,10 @@ x-media-analyst search topics --query "AI coding tools"
 x-media-analyst media rebuild
 x-media-analyst run stack
 ```
+
+Search is one of the core workflows, both in the UI and from the CLI.
+
+![Media search](docs/screenshots/media-search.png)
 
 ## OpenClaw Compatible
 
@@ -230,6 +240,10 @@ npm run capture:x-api-tweet
 npm run analyze:missing
 npm run analyze:topics -- --limit 100
 ```
+
+When you want to turn a saved asset directly into output, the composer keeps the media, topic context, and angle hints in one place.
+
+![Media composer](docs/screenshots/media-composer.png)
 
 ### Rebuild media grouping and summaries
 
